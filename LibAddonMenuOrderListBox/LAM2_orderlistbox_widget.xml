@@ -17,5 +17,6 @@
             <OnReceiveDrag>
                 LAM2_orderlistbox_widget_OnReceiveDrag(self, button)
             </OnReceiveDrag>
-        </Label>    </Controls>
+        </Label>
+    </Controls>
 </GuiXml>
