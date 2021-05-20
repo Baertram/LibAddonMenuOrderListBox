@@ -36,24 +36,34 @@ local moveText = GetString(SI_HOUSINGEDITORCOMMANDTYPE1)
 local moveTextLower = string.lower(moveText)
 local translations = {
     ["en"] = {
-        UP      = moveText .. " up",
-        DOWN    = moveText .. " down",
+        UP              = moveText .. " up",
+        DOWN            = moveText .. " down",
+        TOTAL_UP        = moveText .. " to top",
+        TOTAL_DOWN      = moveText .. " to bottom",
     },
     ["de"] = {
-        UP      = "Hoch " .. moveTextLower,
-        DOWN    = "Runter " .. moveTextLower,
+        UP              = "Hoch " .. moveTextLower,
+        DOWN            = "Herrunter " .. moveTextLower,
+        TOTAL_UP        = "Zum Anfang " .. moveTextLower,
+        TOTAL_DOWN      = "Zum Ende " .. moveTextLower,
     },
     ["jp"] = {
-        UP      = moveText .. " up",
-        DOWN    = moveText .. " down",
+        UP              = moveText .. " up",
+        DOWN            = moveText .. " down",
+        TOTAL_UP        = moveText .. " to top",
+        TOTAL_DOWN      = moveText .. " to bottom",
     },
     ["fr"] = {
-        UP      = moveText .. " up",
-        DOWN    = moveText .. " down",
+        UP              = moveText .. " up",
+        DOWN            = moveText .. " down",
+        TOTAL_UP        = moveText .. " to top",
+        TOTAL_DOWN      = moveText .. " to bottom",
     },
     ["ru"] = {
-        UP      = moveText .. " up",
-        DOWN    = moveText .. " down",
+        UP              = moveText .. " up",
+        DOWN            = moveText .. " down",
+        TOTAL_UP        = moveText .. " to top",
+        TOTAL_DOWN      = moveText .. " to bottom",
     },
 }
 local lang = string.lower(GetCVar("Language.2"))
@@ -174,7 +184,7 @@ function OrderListBox:Initialize(panel, control, orderListBoxData)
 
     self.orderListBoxData = orderListBoxData
     --Create the ZO_ScrollList with the move up and down buttons
-    self.scrollListControl, self.moveUpButton, self.moveDownButton = self:Create(control, orderListBoxData)
+    self.scrollListControl, self.moveUpButton, self.moveDownButton, self.moveTotalUpButton, self.moveTotalDownButton = self:Create(control, orderListBoxData)
 end
 
 --Create the scroll list and it's dataType, set the init values etc. Control is the LAM "container" containing the ZO_ScrollList we create here
@@ -196,7 +206,7 @@ function OrderListBox:Create(control, orderListBoxData)
 
 
     --Add the move up and move down button controls at the right of the ZO_ScrollList
-    local function onButtonClicked(buttonCtrl, mouseButton, ctrl, alt, shift, command, isUp)
+    local function onButtonClicked(buttonCtrl, mouseButton, ctrl, alt, shift, command, isUp, moveToTopOrBottom)
         --d(">Clicked - isUp: " ..tostring(isUp))
         --Left mouse clicked?
         if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then return end
@@ -214,7 +224,7 @@ function OrderListBox:Create(control, orderListBoxData)
             if selectedIndex == #scrollListData then return end
         end
         --d(">calling MoveItem now...")
-        selfVar:MoveItem(selectedIndex, isUp)
+        selfVar:MoveItem(selectedIndex, isUp, nil, moveToTopOrBottom)
     end
 
     local buttonMoveUpControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveUp", scrollListControl, CT_BUTTON)
@@ -241,7 +251,7 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveUpControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
         if selfVar.disabled then return end
-        onButtonClicked(buttonCtrl, button, ctrl, alt, shift, command, true)
+        onButtonClicked(buttonCtrl, button, ctrl, alt, shift, command, true, false)
     end)
     buttonMoveUpControl:SetMouseEnabled(false)
 
@@ -270,9 +280,67 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveDownControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
         if selfVar.disabled then return end
-        onButtonClicked(buttonCtrl, button, ctrl, alt, shift, command, false)
+        onButtonClicked(buttonCtrl, button, ctrl, alt, shift, command, false, false)
     end)
     buttonMoveDownControl:SetMouseEnabled(false)
+
+    local buttonMoveTotalUpControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveTotalUp", scrollListControl, CT_BUTTON)
+    buttonMoveTotalUpControl:SetDimensions(16, 16)
+    buttonMoveTotalUpControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
+    buttonMoveTotalUpControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
+    buttonMoveTotalUpControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
+    buttonMoveTotalUpControl:SetPressedTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
+    buttonMoveTotalUpControl:SetDisabledTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_disabled.dds")
+    buttonMoveTotalUpControl:SetPressedOffset(2, 2)
+    buttonMoveTotalUpControl:SetTextureCoords(1, 0, 1, 0) -- rotate by 180° so the texture points up
+    buttonMoveTotalUpControl:SetAnchor(BOTTOM, buttonMoveUpControl, TOP, 0, -4)
+    buttonMoveTotalUpControl:SetHidden(true)
+    buttonMoveTotalUpControl:SetClickSound("Click")
+    buttonMoveTotalUpControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].TOTAL_UP)}
+    buttonMoveTotalUpControl:SetHandler("OnMouseEnter", function(button)
+        if selfVar.disabled then return end
+        ZO_Options_OnMouseEnter(button)
+        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+    end)
+    buttonMoveTotalUpControl:SetHandler("OnMouseExit", function(button)
+        if selfVar.disabled then return end
+        ZO_Options_OnMouseExit(button)
+        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+    end)
+    buttonMoveTotalUpControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
+        if selfVar.disabled then return end
+        onButtonClicked(buttonCtrl, button, ctrl, alt, shift, command, true, true)
+    end)
+    buttonMoveTotalUpControl:SetMouseEnabled(false)
+
+    local buttonMoveTotalDownControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveTotalDown", scrollListControl, CT_BUTTON)
+    buttonMoveTotalDownControl:SetDimensions(16, 16)
+    buttonMoveTotalDownControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
+    buttonMoveTotalDownControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
+    buttonMoveTotalDownControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
+    buttonMoveTotalDownControl:SetPressedTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
+    buttonMoveTotalDownControl:SetDisabledTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_disabled.dds")
+    buttonMoveTotalDownControl:SetPressedOffset(2, 2)
+    buttonMoveTotalDownControl:SetAnchor(TOP, buttonMoveDownControl, BOTTOM, 0, 4)
+    buttonMoveTotalDownControl:SetHidden(true)
+    buttonMoveTotalDownControl:SetClickSound("Click")
+    buttonMoveTotalDownControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].TOTAL_DOWN)}
+    buttonMoveTotalDownControl:SetHandler("OnMouseEnter", function(button)
+        if selfVar.disabled then return end
+        ZO_Options_OnMouseEnter(button)
+        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+    end)
+    buttonMoveTotalDownControl:SetHandler("OnMouseExit", function(button)
+        if selfVar.disabled then return end
+        ZO_Options_OnMouseExit(button)
+        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+    end)
+    buttonMoveTotalDownControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
+        if selfVar.disabled then return end
+        onButtonClicked(buttonCtrl, button, ctrl, alt, shift, command, false, true)
+    end)
+    buttonMoveTotalDownControl:SetMouseEnabled(false)
+
 
     --OrderListBox datatype and data population + commit to show the entries
     --[[
@@ -302,7 +370,7 @@ function OrderListBox:Create(control, orderListBoxData)
     local selectCallback = function(previouslySelectedData, selectedData, reselectingDuringRebuild)
         --Check the disabled state of the LAM control and do not select any entry if it is disabled
         if selfVar.disabled then return end
-        self:OnRowSelected(previouslySelectedData, selectedData, reselectingDuringRebuild, buttonMoveUpControl, buttonMoveDownControl)
+        self:OnRowSelected(previouslySelectedData, selectedData, reselectingDuringRebuild, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl)
     end
 
     ZO_ScrollList_AddDataType(scrollListControl, dataTypeId, templateName, rowHeight, setupFunction, hideCallback, dataTypeSelectSound, resetControlCallback)
@@ -327,7 +395,7 @@ function OrderListBox:Create(control, orderListBoxData)
     --self.masterList = self:Populate(orderListBoxData)
     --self:UpdateScrollList(scrollListControl, self.masterList, dataTypeId)
 
-    return scrollListControl, buttonMoveUpControl, buttonMoveDownControl
+    return scrollListControl, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl
 end
 
 
@@ -463,7 +531,7 @@ end
 
 
 --Row was selected callback function
-function OrderListBox:OnRowSelected(previouslySelectedData, selectedData, reselectingDuringRebuild, buttonMoveUpControl, buttonMoveDownControl)
+function OrderListBox:OnRowSelected(previouslySelectedData, selectedData, reselectingDuringRebuild, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl)
 --d(">OnRowSelected, draggingEntryId: " .. tostring(self.draggingEntryId))
     if self.disabled then return end
     if not selectedData then
@@ -471,6 +539,10 @@ function OrderListBox:OnRowSelected(previouslySelectedData, selectedData, resele
         buttonMoveUpControl:SetHidden(true)
         buttonMoveDownControl:SetMouseEnabled(false)
         buttonMoveDownControl:SetHidden(true)
+        buttonMoveTotalUpControl:SetMouseEnabled(false)
+        buttonMoveTotalUpControl:SetHidden(true)
+        buttonMoveTotalDownControl:SetMouseEnabled(false)
+        buttonMoveTotalDownControl:SetHidden(true)
         return
     else
         local selectedIndex = ZO_ScrollList_GetSelectedDataIndex(self.scrollListControl)
@@ -481,7 +553,7 @@ end
 
 
 --Move an entry of the list up or down
-function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex)
+function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBottom)
     if self.disabled then return end
     local movedUp
     if moveUp == nil and moveToIndex == nil then return end
@@ -493,26 +565,26 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex)
     --Get the current data table of the list
     local currentData = scrollListControl.data
     if not currentData then return end
+    local maxEntries = #currentData
     local entryToMove = self.orderListBoxData.listEntries[selectedIndex]
     if not entryToMove then return end
     --d(">entryToMove: " ..tostring(entryToMove.text))
     --Move item up by 1
     local newIndex
     if moveUp == true and selectedIndex > 1 then
-        --d(">move 1 up")
-        newIndex = selectedIndex - 1
+        newIndex = (moveToTopOrBottom ~= nil and moveToTopOrBottom == true and 1) or selectedIndex - 1
         table.remove(self.orderListBoxData.listEntries, selectedIndex)
         table.insert(self.orderListBoxData.listEntries, newIndex, entryToMove)
         movedUp = true
 
         --Move item down by 1
-    elseif moveUp == false and selectedIndex < #currentData then
+    elseif moveUp == false and selectedIndex < maxEntries then
         --d(">move 1 down")
-        newIndex = selectedIndex + 1
+        newIndex = (moveToTopOrBottom ~= nil and moveToTopOrBottom == true and maxEntries) or selectedIndex + 1
         table.remove(self.orderListBoxData.listEntries, selectedIndex)
         table.insert(self.orderListBoxData.listEntries, newIndex, entryToMove)
         movedUp = false
-    elseif moveUp == nil and moveToIndex ~= nil and moveToIndex >= 1 and moveToIndex <= #currentData then
+    elseif moveUp == nil and moveToTop == nil and moveToIndex ~= nil and moveToIndex >= 1 and moveToIndex <= maxEntries then
         newIndex = moveToIndex
         table.remove(self.orderListBoxData.listEntries, selectedIndex)
         table.insert(self.orderListBoxData.listEntries, newIndex, entryToMove)
@@ -523,7 +595,7 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex)
     --Refresh the list contents! Will remove selection
     UpdateValue(self.control, false, self.orderListBoxData.listEntries)
 
-    local wasMovedToLastEntry = newIndex == #currentData
+    local wasMovedToLastEntry = newIndex == maxEntries
     local wasMovedToFirstEntry = newIndex == 1
 
     zo_callLater(function()
@@ -568,15 +640,23 @@ function OrderListBox:UpdateMoveButtonsEnabledState(newIndex)
     if not newIndex then return end
     self.moveUpButton:SetHidden(false)
     self.moveDownButton:SetHidden(false)
+    self.moveTotalUpButton:SetHidden(false)
+    self.moveTotalDownButton:SetHidden(false)
     if newIndex == 1 then
         self.moveUpButton:SetMouseEnabled(false)
         self.moveDownButton:SetMouseEnabled(true)
+        self.moveTotalUpButton:SetMouseEnabled(false)
+        self.moveTotalDownButton:SetMouseEnabled(true)
     elseif newIndex == #self.scrollListControl.data then
         self.moveUpButton:SetMouseEnabled(true)
         self.moveDownButton:SetMouseEnabled(false)
+        self.moveTotalUpButton:SetMouseEnabled(true)
+        self.moveTotalDownButton:SetMouseEnabled(false)
     else
         self.moveUpButton:SetMouseEnabled(true)
         self.moveDownButton:SetMouseEnabled(true)
+        self.moveTotalUpButton:SetMouseEnabled(true)
+        self.moveTotalDownButton:SetMouseEnabled(true)
     end
 end
 
@@ -616,7 +696,7 @@ function OrderListBox:StopDragging(draggedOnToControl, mouseButton)
     if mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId and self.draggingSortListContents then
 --d("[OrderListBox]StopDragging -- from index: " ..tostring(self.draggingEntryId) .." to index: " ..tostring(draggedOnToControl.index))
         --Remove the entry at index self.draggingEntryId and insert it at draggedOnToControl.dataEntry.data.index
-        self:MoveItem(self.draggingEntryId, nil, draggedOnToControl.index)
+        self:MoveItem(self.draggingEntryId, nil, draggedOnToControl.index, nil)
         clearDragging(self)
     end
 end
