@@ -11,12 +11,15 @@
         [2] = {...},
         ...
     },
+    disableDrag = false, -- or function returning a boolean (optional). Disable the drag&drop of the rows
+    disableButtons = false, -- or function returning a boolean (optional). Disable the move up/move down/move to top/move to bottom buttons
+    showPosition = false, -- or function returning a boolean (optional). Show the position number in front of the list entry
     getFunc = function() return db.currentSortedListEntries end,
     setFunc = function(currentSortedListEntries) db.currentSortedListEntries = currentSortedListEntries doStuff() end,
     tooltip = "OrderListBox's tooltip text.", -- or string id or function returning a string (optional)
     width = "full", -- or "half" (optional)
-    minHeight = function() return db.minHeightNumber end, --or number for the minimum height of this control. Default: 26 (optional)
-    maxHeight = function() return db.maxHeightNumber end, --or number for the maximum height of this control. Default: 4 * minHeight (optional)
+    minHeight = function() return db.minHeightNumber end, --or number for the minimum height of this control. Default: 125 (optional)
+    maxHeight = function() return db.maxHeightNumber end, --or number for the maximum height of this control. Default: value of minHeight (optional)
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
     warning = "May cause permanent awesomeness.", -- or string id or function returning a string (optional)
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
@@ -27,9 +30,12 @@
 
 local widgetVersion = 1
 local LAM = LibAddonMenu2
+local util = LAM.util
 local em = EVENT_MANAGER
 local wm = WINDOW_MANAGER
 local cm = CALLBACK_MANAGER
+
+local LAMgetDefaultValue = util.GetDefaultValue
 
 --Translations
 local moveText = GetString(SI_HOUSINGEDITORCOMMANDTYPE1)
@@ -79,49 +85,49 @@ local SORT_LIST_ROW_HEIGHT                  = 25
 local SORT_LIST_ROW_TEMPLATE_NAME           = "LAM2_orderlistbox_widget_scrolllist_row" --"ZO_SelectableLabel"
 local SORT_LIST_ROW_SELECTION_TEMPLATE_NAME = "ZO_ThinListHighlight"
 
-local MIN_HEIGHT = SORT_LIST_ROW_HEIGHT * 5
+local MIN_HEIGHT                            = SORT_LIST_ROW_HEIGHT * 5
 
 
 
 ------------------------------------------------------------------------------------------------------------------------
 --Local helper functions
 ------------------------------------------------------------------------------------------------------------------------
+--Functions of the listBox data table
+local function getShowPositionInfoFromListBoxData(orderListBoxData)
+    local showPosition      = LAMgetDefaultValue(orderListBoxData.showPosition) or false
+    return showPosition
+end
+
+local function getDisabledInfoFromListBoxData(orderListBoxData)
+    local disabledDrag      = LAMgetDefaultValue(orderListBoxData.disableDrag)
+    local isDragDisabled    = (disabledDrag ~=nil and disabledDrag) or false
+    local disableButtons    = LAMgetDefaultValue(orderListBoxData.disableButtons)
+    local areButtonsDisabled= (disableButtons ~=nil and disableButtons) or false
+    return isDragDisabled, areButtonsDisabled
+end
+
 --Update & disabled
-local function UpdateDisabled(control)
-    local disable
-    if type(control.data.disabled) == "function" then
-        disable = control.data.disabled()
-    else
-        disable = control.data.disabled
+local function updateButtonsEnabledState(control, areButtonsDisabled, orderListBoxData, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl)
+    if not control then return end
+    if orderListBoxData == nil or buttonMoveUpControl == nil or buttonMoveDownControl  == nil or buttonMoveTotalUpControl  == nil or buttonMoveTotalDownControl == nil then
+        local orderListBox  = control.orderListBox
+        orderListBoxData = orderListBox.orderListBoxData
+        buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl = orderListBox.moveUpButton, orderListBox.moveDownButton, orderListBox.moveTotalUpButton, orderListBox.moveTotalDownButton
     end
-
-    local orderListBox  = control.orderListBox
-    local scrollList    = control.orderListBox.scrollListControl
-    if disable then
-        control.label:SetColor(ZO_DEFAULT_DISABLED_COLOR:UnpackRGBA())
-        control:SetMouseEnabled(false)
-        scrollList:SetMouseEnabled(false)
-        orderListBox.moveUpButton:SetMouseEnabled(false)
-        orderListBox.moveDownButton:SetMouseEnabled(false)
-        orderListBox.disabled = true
-
-        --Disable scrollbar
-        ZO_ScrollList_SetUseScrollbar(scrollList, false)
-        ZO_ScrollList_Commit(scrollList)
-
-    else
-        control.label:SetColor(ZO_DEFAULT_ENABLED_COLOR:UnpackRGBA())
-        control:SetMouseEnabled(true)
-        scrollList:SetMouseEnabled(true)
-        orderListBox.moveUpButton:SetMouseEnabled(true)
-        orderListBox.moveDownButton:SetMouseEnabled(true)
-        orderListBox.disabled = false
-
-        --Enable scrollbar
-        ZO_ScrollList_SetUseScrollbar(scrollList, true)
-        ZO_ScrollList_Commit(scrollList)
-
+    if areButtonsDisabled == nil then
+        areButtonsDisabled = orderListBoxData ~= nil and select(2, getDisabledInfoFromListBoxData(orderListBoxData))
     end
+    if areButtonsDisabled == nil then areButtonsDisabled = false end
+    local mouseEnabled = not areButtonsDisabled
+
+    buttonMoveUpControl:SetHidden(areButtonsDisabled)
+    buttonMoveUpControl:SetMouseEnabled(mouseEnabled)
+    buttonMoveDownControl:SetHidden(areButtonsDisabled)
+    buttonMoveDownControl:SetMouseEnabled(mouseEnabled)
+    buttonMoveTotalUpControl:SetHidden(areButtonsDisabled)
+    buttonMoveTotalUpControl:SetMouseEnabled(mouseEnabled)
+    buttonMoveTotalDownControl:SetHidden(areButtonsDisabled)
+    buttonMoveTotalDownControl:SetMouseEnabled(mouseEnabled)
 end
 
 local function updateOrderListBoxEntries(control, value)
@@ -130,23 +136,66 @@ local function updateOrderListBoxEntries(control, value)
     orderListBox.orderListBoxData.listEntries = value
     --Update the order list now with new populated masterlist
     orderListBox.masterList = orderListBox:Populate(orderListBox.orderListBoxData)
-    orderListBox:UpdateScrollList(orderListBox.scrollListControl, orderListBox.masterList, LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE)
+    orderListBox:UpdateScrollList(orderListBox.scrollListControl, orderListBox.masterList, LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE, orderListBox)
+end
+
+local function updateDisabledStateOfControls(control, disable)
+    local enabledState = not disable
+    control:SetMouseEnabled(enabledState)
+    local orderListBox  = control.orderListBox
+    local scrollList    = control.orderListBox.scrollListControl
+
+    scrollList:SetMouseEnabled(enabledState)
+
+    orderListBox.disabled = disable
+    local areButtonsDisabled = disable
+    --Hide the buttons as no entry was selected, as we currently are building the LAM controls.
+    --Or after re-enabling the LAM control again via the UpdateDisabled function and no entry is selected.
+    if areButtonsDisabled == false and (control.isBuilding == true or (scrollList and scrollList.selectedDataIndex == nil)) then
+        areButtonsDisabled = true
+    elseif areButtonsDisabled == false then
+        areButtonsDisabled = orderListBox.areButtonsDisabled
+    end
+    updateButtonsEnabledState(control, areButtonsDisabled, orderListBox.orderListBoxData, orderListBox.moveUpButton, orderListBox.moveDownButton, orderListBox.moveTotalUpButton, orderListBox.moveTotalDownButton)
+
+    --Disable scrollbar
+    ZO_ScrollList_SetUseScrollbar(scrollList, enabledState)
+    --Redraw the scrolllist
+    ZO_ScrollList_Commit(scrollList)
+end
+
+local function UpdateDisabled(control)
+    local disable
+    if type(control.data.disabled) == "function" then
+        disable = control.data.disabled()
+    else
+        disable = control.data.disabled
+    end
+
+    if disable then
+        control.label:SetColor(ZO_DEFAULT_DISABLED_COLOR:UnpackRGBA())
+    else
+        control.label:SetColor(ZO_DEFAULT_ENABLED_COLOR:UnpackRGBA())
+    end
+    updateDisabledStateOfControls(control, disable)
 end
 
 local function UpdateValue(control, forceDefault, value)
 --d(">UpdateValue - value: " ..tostring(value))
+    local requestRefresh = false
     if forceDefault then --if we are forcing defaults
-        value = LAM.util.GetDefaultValue(control.data.default)
+        value = LAMgetDefaultValue(control.data.default)
         control.data.setFunc(value)
-        updateOrderListBoxEntries(control, value)
     elseif value then
         control.data.setFunc(value)
-        updateOrderListBoxEntries(control, value)
-        --after setting this value, let's refresh the others to see if any should be disabled or have their settings changed
-        LAM.util.RequestRefreshIfNeeded(control)
+        requestRefresh = true
     else
         value = control.data.getFunc()
-        updateOrderListBoxEntries(control, value)
+    end
+    updateOrderListBoxEntries(control, value)
+    if requestRefresh == true then
+        --after setting this value, let's refresh the others to see if any should be disabled or have their settings changed
+        LAM.util.RequestRefreshIfNeeded(control)
     end
 end
 
@@ -160,7 +209,6 @@ local function abortDragging(selfVar)
     clearDragging(selfVar)
     selfVar:StopDragging()
 end
-
 
 ------------------------------------------------------------------------------------------------------------------------
 --OrderListBox class
@@ -181,8 +229,12 @@ function OrderListBox:Initialize(panel, control, orderListBoxData)
     self.control = control
 
     self.disabled = false
+    self.areButtonsDisabled = false
+    self.isDragDisabled = false
+    self.showPosition = false
 
     self.orderListBoxData = orderListBoxData
+
     --Create the ZO_ScrollList with the move up and down buttons
     self.scrollListControl, self.moveUpButton, self.moveDownButton, self.moveTotalUpButton, self.moveTotalDownButton = self:Create(control, orderListBoxData)
 end
@@ -203,7 +255,6 @@ function OrderListBox:Create(control, orderListBoxData)
     scrollListControl:SetAnchor(TOPLEFT, controlContainer, TOPLEFT)
     scrollListControl:SetAnchor(BOTTOMRIGHT, control, BOTTOMRIGHT, (widthXMinus * -1), 0)
     scrollListControl:SetHidden(false)
-
 
     --Add the move up and move down button controls at the right of the ZO_ScrollList
     local function onButtonClicked(buttonCtrl, mouseButton, ctrl, alt, shift, command, isUp, moveToTopOrBottom)
@@ -255,7 +306,6 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveUpControl:SetMouseEnabled(false)
 
-
     local buttonMoveDownControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveDown", scrollListControl, CT_BUTTON)
     buttonMoveDownControl:SetDimensions(16, 16)
     buttonMoveDownControl:SetNormalTexture("/esoui/art/buttons/scrollbox_downarrow_up.dds")
@@ -285,7 +335,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetMouseEnabled(false)
 
     local buttonMoveTotalUpControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveTotalUp", scrollListControl, CT_BUTTON)
-    buttonMoveTotalUpControl:SetDimensions(16, 16)
+    buttonMoveTotalUpControl:SetDimensions(15, 15)
     buttonMoveTotalUpControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
     buttonMoveTotalUpControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
     buttonMoveTotalUpControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
@@ -314,7 +364,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalUpControl:SetMouseEnabled(false)
 
     local buttonMoveTotalDownControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveTotalDown", scrollListControl, CT_BUTTON)
-    buttonMoveTotalDownControl:SetDimensions(16, 16)
+    buttonMoveTotalDownControl:SetDimensions(15, 15)
     buttonMoveTotalDownControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
     buttonMoveTotalDownControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
     buttonMoveTotalDownControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
@@ -341,6 +391,12 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveTotalDownControl:SetMouseEnabled(false)
 
+    --Are the buttons disabled?
+    self.isDragDisabled, self.areButtonsDisabled = getDisabledInfoFromListBoxData(orderListBoxData)
+    updateButtonsEnabledState(control, self.areButtonsDisabled, orderListBoxData, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl)
+
+    --Show the position number in front of the row entry text?
+    self.showPosition = getShowPositionInfoFromListBoxData(orderListBoxData)
 
     --OrderListBox datatype and data population + commit to show the entries
     --[[
@@ -439,7 +495,7 @@ end
 -- Update any changes to a scroll list data table then commit those changes to the screen
 -- Repeat this step as needed if you have a data table that will have changing data (like an inventory).
 --------------------------------------------------
-function OrderListBox:UpdateScrollList(control, data, rowDataType)
+function OrderListBox:UpdateScrollList(control, data, rowDataType, lamControl)
 --d("[LAM2]OrderListBox:UpdateScrollList")
 	--[[ 	Adds data to the datalist already stored in the control  rowtype is the typeId we assigned in CreateScrollListDataType.
 
@@ -464,6 +520,8 @@ function OrderListBox:UpdateScrollList(control, data, rowDataType)
 	--table.sort(dataList, function(a,b) return a.data.text < b.data.text end)
 
 	-- Redraw the scroll list.
+    -- Not if the LAM control is currently building, as the UpdateDisabled function will call the commit then!
+    if lamControl.isBuilding == true then return end
 	ZO_ScrollList_Commit(control)
 end
 
@@ -543,7 +601,6 @@ function OrderListBox:OnRowSelected(previouslySelectedData, selectedData, resele
         buttonMoveTotalUpControl:SetHidden(true)
         buttonMoveTotalDownControl:SetMouseEnabled(false)
         buttonMoveTotalDownControl:SetHidden(true)
-        return
     else
         local selectedIndex = ZO_ScrollList_GetSelectedDataIndex(self.scrollListControl)
         if not selectedIndex then return end
@@ -584,7 +641,7 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBo
         table.remove(self.orderListBoxData.listEntries, selectedIndex)
         table.insert(self.orderListBoxData.listEntries, newIndex, entryToMove)
         movedUp = false
-    elseif moveUp == nil and moveToTop == nil and moveToIndex ~= nil and moveToIndex >= 1 and moveToIndex <= maxEntries then
+    elseif moveUp == nil and moveToTopOrBottom == nil and moveToIndex ~= nil and moveToIndex >= 1 and moveToIndex <= maxEntries then
         newIndex = moveToIndex
         table.remove(self.orderListBoxData.listEntries, selectedIndex)
         table.insert(self.orderListBoxData.listEntries, newIndex, entryToMove)
@@ -636,7 +693,7 @@ end
 
 function OrderListBox:UpdateMoveButtonsEnabledState(newIndex)
 --d("[LAM2 OrderListBox]UpdateMoveButtonsEnabledState")
-    if self.disabled then return end
+    if self.disabled or self.areButtonsDisabled then return end
     if not newIndex then return end
     self.moveUpButton:SetHidden(false)
     self.moveDownButton:SetHidden(false)
@@ -644,14 +701,18 @@ function OrderListBox:UpdateMoveButtonsEnabledState(newIndex)
     self.moveTotalDownButton:SetHidden(false)
     if newIndex == 1 then
         self.moveUpButton:SetMouseEnabled(false)
+        self.moveUpButton:SetHidden(true)
         self.moveDownButton:SetMouseEnabled(true)
         self.moveTotalUpButton:SetMouseEnabled(false)
+        self.moveTotalUpButton:SetHidden(true)
         self.moveTotalDownButton:SetMouseEnabled(true)
     elseif newIndex == #self.scrollListControl.data then
         self.moveUpButton:SetMouseEnabled(true)
         self.moveDownButton:SetMouseEnabled(false)
+        self.moveDownButton:SetHidden(true)
         self.moveTotalUpButton:SetMouseEnabled(true)
         self.moveTotalDownButton:SetMouseEnabled(false)
+        self.moveTotalDownButton:SetHidden(true)
     else
         self.moveUpButton:SetMouseEnabled(true)
         self.moveDownButton:SetMouseEnabled(true)
@@ -662,7 +723,7 @@ end
 
 function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt, shift, command)
 --d("[OrderListBox]OnGlobalMouseUpDuringDrag - draggedIndex: " ..tostring(self.draggingEntryId))
-    if self.disabled then return end
+    if self.disabled or self.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then abortDragging() end
     if self.draggingEntryId and self.draggingSortListContents then
         local controlBelowMouse = moc()
@@ -675,7 +736,7 @@ end
 
 
 function OrderListBox:StartDragging(draggedControl, mouseButton)
-    if self.disabled then return end
+    if self.disabled or self.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then return end
 --d("[OrderListBox]StartDragging - index: " ..tostring(draggedControl.index))
     self.draggingEntryId            = draggedControl.index
@@ -691,7 +752,7 @@ end
 
 
 function OrderListBox:StopDragging(draggedOnToControl, mouseButton)
-    if self.disabled then return end
+    if self.disabled or self.isDragDisabled then return end
     wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
     if mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId and self.draggingSortListContents then
 --d("[OrderListBox]StopDragging -- from index: " ..tostring(self.draggingEntryId) .." to index: " ..tostring(draggedOnToControl.index))
@@ -719,6 +780,12 @@ end
 ------------------------------------------------------------------------------------------------------------------------
 function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     local control = LAM.util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
+    control.isBuilding = true
+
+    orderListBoxData.disableDrag    = orderListBoxData.disableDrag or false
+    orderListBoxData.disableButtons = orderListBoxData.disableButtons or false
+    orderListBoxData.disabled       = orderListBoxData.disabled or false
+
     local width = control:GetWidth()
 
     control:SetHandler("OnMouseEnter", function() ZO_Options_OnMouseEnter(control) end)
@@ -741,10 +808,11 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
 
     control.UpdateValue = UpdateValue
     control:UpdateValue()
-    if orderListBoxData.disabled ~= nil then
-        control.UpdateDisabled = UpdateDisabled
-        control:UpdateDisabled()
-    end
+
+    control.UpdateDisabled = UpdateDisabled
+    control:UpdateDisabled()
+
+    control.isBuilding = false
 
     LAM.util.RegisterForRefreshIfNeeded(control)
     LAM.util.RegisterForReloadIfNeeded(control)
