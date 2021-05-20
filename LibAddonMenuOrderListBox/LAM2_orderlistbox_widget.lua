@@ -247,7 +247,7 @@ function OrderListBox:Create(control, orderListBoxData)
     local controlName = control:GetName()
 
     --OrderListBox -> ZO_ScrollList control
-    local scrollListControl = WINDOW_MANAGER:CreateControlFromVirtual(controlName .. "_OrderListBox", control, "ZO_ScrollList")
+    local scrollListControl = wm:CreateControlFromVirtual(controlName .. "_OrderListBox", control, "ZO_ScrollList")
     local controlHeight = control:GetHeight()
     local widthXMinus = (orderListBoxData.width=="half" and 16) or 12
     local width = controlContainer:GetWidth() - widthXMinus
@@ -278,7 +278,7 @@ function OrderListBox:Create(control, orderListBoxData)
         selfVar:MoveItem(selectedIndex, isUp, nil, moveToTopOrBottom)
     end
 
-    local buttonMoveUpControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveUp", scrollListControl, CT_BUTTON)
+    local buttonMoveUpControl = wm:CreateControl(controlName .. "_ButtonMoveUp", scrollListControl, CT_BUTTON)
     buttonMoveUpControl:SetDimensions(16, 16)
     buttonMoveUpControl:SetNormalTexture("/esoui/art/buttons/scrollbox_uparrow_up.dds")
     buttonMoveUpControl:SetMouseOverTexture("/esoui/art/buttons/scrollbox_uparrow_over.dds")
@@ -306,7 +306,7 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveUpControl:SetMouseEnabled(false)
 
-    local buttonMoveDownControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveDown", scrollListControl, CT_BUTTON)
+    local buttonMoveDownControl = wm:CreateControl(controlName .. "_ButtonMoveDown", scrollListControl, CT_BUTTON)
     buttonMoveDownControl:SetDimensions(16, 16)
     buttonMoveDownControl:SetNormalTexture("/esoui/art/buttons/scrollbox_downarrow_up.dds")
     buttonMoveDownControl:SetMouseOverTexture("/esoui/art/buttons/scrollbox_downarrow_over.dds")
@@ -334,7 +334,7 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveDownControl:SetMouseEnabled(false)
 
-    local buttonMoveTotalUpControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveTotalUp", scrollListControl, CT_BUTTON)
+    local buttonMoveTotalUpControl = wm:CreateControl(controlName .. "_ButtonMoveTotalUp", scrollListControl, CT_BUTTON)
     buttonMoveTotalUpControl:SetDimensions(15, 15)
     buttonMoveTotalUpControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
     buttonMoveTotalUpControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
@@ -363,7 +363,7 @@ function OrderListBox:Create(control, orderListBoxData)
     end)
     buttonMoveTotalUpControl:SetMouseEnabled(false)
 
-    local buttonMoveTotalDownControl = WINDOW_MANAGER:CreateControl(controlName .. "_ButtonMoveTotalDown", scrollListControl, CT_BUTTON)
+    local buttonMoveTotalDownControl = wm:CreateControl(controlName .. "_ButtonMoveTotalDown", scrollListControl, CT_BUTTON)
     buttonMoveTotalDownControl:SetDimensions(15, 15)
     buttonMoveTotalDownControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
     buttonMoveTotalDownControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
@@ -532,7 +532,11 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
     -- What is contained in data is determined by the structure of the table of data items you used in the Populate function
     rowControl:SetFont("ZoFontWinH4")
     rowControl:SetMaxLineCount(1) -- Forces the text to only use one row.  If it goes longer, the extra will not display.
-    rowControl:SetText(data.text)
+    if self.showPosition then
+        rowControl:SetText(tostring(rowControl.index) .. ") " .. data.text)
+    else
+        rowControl:SetText(data.text)
+    end
 
     -- When we added the data type earlier we also enabled being able to select an item and which function to run
     -- when an row is slected.  We still need to set up a handler to actuall register the mouse click which
@@ -553,7 +557,7 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
         self.mouseDown = true
         if self.draggingEntryId == nil then
             --Is the left mouse pressed down (before dragging)
-            if mouseButton == MOUSE_BUTTON_INDEX_LEFT then
+            if mouseButton == MOUSE_BUTTON_INDEX_LEFT and not self.isDragDisabled then
                 wm:SetMouseCursor(MOUSE_CURSOR_RESIZE_NS)
             else
                 wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
