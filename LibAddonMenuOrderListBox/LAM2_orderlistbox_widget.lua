@@ -99,11 +99,20 @@ local SORT_LIST_ROW_SELECTION_TEMPLATE_NAME = "ZO_ThinListHighlight"
 
 local MIN_HEIGHT                            = SORT_LIST_ROW_DEFAULT_HEIGHT * 5
 
-
+local cursorTLC
+local cursorTLCLabel
 
 ------------------------------------------------------------------------------------------------------------------------
 --Local helper functions
 ------------------------------------------------------------------------------------------------------------------------
+--Functions of the cursor UI related TLC
+local function getCursorTLC()
+    cursorTLC = wm:GetControlByName("LAM2_orderlistbox_widget_cursor_TLC", nil)
+    cursorTLCLabel = GetControl(cursorTLC, "Label")
+    cursorTLC:ClearAnchors()
+    cursorTLC:SetDimensions(0, 0)
+end
+
 --Functions of the listBox data table
 local function getShowPositionInfoFromListBoxData(orderListBoxData)
     local showPosition = (orderListBoxData.showPosition ~= nil and LAMgetDefaultValue(orderListBoxData.showPosition)) or false
@@ -744,6 +753,12 @@ function OrderListBox:UpdateMoveButtonsEnabledState(newIndex)
     end
 end
 
+
+local function disableOnUpdateHandler(orderListBoxObject)
+    orderListBoxObject:UpdateCursorTLC(true, nil)
+    orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
+end
+
 function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt, shift, command)
 --d("[OrderListBox]OnGlobalMouseUpDuringDrag - draggedIndex: " ..tostring(self.draggingEntryId))
     if self.disabled or self.isDragDisabled then return end
@@ -757,27 +772,77 @@ function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt,
     em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP)
 end
 
+function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
+    if cursorTLC == nil then getCursorTLC() end
+    cursorTLC:ClearAnchors()
+    cursorTLC:SetResizeToFitDescendents(true)
+    if not isHidden then
+        cursorTLC:SetAnchor(LEFT, GuiMouse, RIGHT, 5, 0)
+        cursorTLCLabel:SetText(self.draggingText or "Hallo Welt")
+        local textWidth = (cursorTLCLabel:GetTextWidth() or 150) + 2
+        cursorTLCLabel:SetWidth(textWidth)
+        cursorTLCLabel:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
+        cursorTLC:SetWidth(textWidth)
+        cursorTLC:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
+        local width, height = cursorTLCLabel:GetDimensions()
+        if width > 600 then width = 600 end
+        if height > 100 then height = 100 end
+--d(">GuiMouse:isHidden: " ..tostring(GuiMouse:IsHidden()) .. ", cursorTLC.width: " ..tostring(cursorTLC:GetWidth()) ..", cursorTLC.height: " ..tostring(cursorTLC:GetHeight()) .. ", text: " ..tostring(self.draggingText))
+        cursorTLC:SetDimensionConstraints(width, height, 600, 100)
+        cursorTLC:SetDrawTier(DT_HIGH)
+        cursorTLC:SetDrawLayer(DL_OVERLAY)
+        cursorTLC:SetDrawLevel(5)
+    else
+        cursorTLC:SetDimensions(0, 0)
+        cursorTLCLabel:SetText("")
+        cursorTLC:SetDrawTier(DT_LOW)
+        cursorTLC:SetDrawLayer(DL_BACKGROUND)
+        cursorTLC:SetDrawLevel(0)
+    end
+    cursorTLC:SetHidden(isHidden)
+    cursorTLC:SetMouseEnabled(false)
+end
+
+function OrderListBox:DragOnUpdateCallback(draggedControl)
+--d("[LAM2OrderListBox]OnUpdate")
+    if self.disabled or self.isDragDisabled then
+        disableOnUpdateHandler(self)
+        return
+    end
+    --local x, y = GetUIMousePosition()
+    --Anchor to GuiMouse
+    self:UpdateCursorTLC(false, draggedControl)
+end
 
 function OrderListBox:StartDragging(draggedControl, mouseButton)
-    if self.disabled or self.isDragDisabled then return end
+    local selfVar = self
+    if self.disabled or selfVar.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then return end
---d("[OrderListBox]StartDragging - index: " ..tostring(draggedControl.index))
+    --d("[OrderListBox]StartDragging - index: " ..tostring(draggedControl.index))
     self.draggingEntryId            = draggedControl.index
     self.draggingSortListContents   = draggedControl:GetParent()
     self.draggingText               = draggedControl.dataEntry.data.text
+    self.draggingXStart, self.draggingYStart = GetUIMousePosition()
+
     wm:SetMouseCursor(MOUSE_CURSOR_RESIZE_NS)
     --Unselect any selected entry
     ZO_ScrollList_SelectData(self.scrollListControl, nil, nil, nil, true)
     --Enable a global MouseUp check and see if the mouse is above the ZO_SortList where the drag started
     --If not: End the drag&drop
-    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP, function(...) self:OnGlobalMouseUpDuringDrag(...) end)
+    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP, function(...) selfVar:OnGlobalMouseUpDuringDrag(...) end)
+
+    self.scrollListControl:SetHandler("OnUpdate", function() selfVar:DragOnUpdateCallback(draggedControl) end)
 end
 
 
 function OrderListBox:StopDragging(draggedOnToControl, mouseButton)
+    disableOnUpdateHandler(self)
     if self.disabled or self.isDragDisabled then return end
     wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
     if mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId and self.draggingSortListContents then
+        --local totalDeltaX = GetUIMousePosition() - self.draggingXStart
+        --local lastFrameDeltaX = GetUIMouseDeltas() * 15
+        --self:SetSelectedIndex(zo_round((self:CalculateSelectedIndexOffset() + totalDeltaX + lastFrameDeltaX) / self.controlEntryWidth))
 --d("[OrderListBox]StopDragging -- from index: " ..tostring(self.draggingEntryId) .." to index: " ..tostring(draggedOnToControl.index))
         --Remove the entry at index self.draggingEntryId and insert it at draggedOnToControl.dataEntry.data.index
         self:MoveItem(self.draggingEntryId, nil, draggedOnToControl.index, nil)
@@ -861,6 +926,8 @@ end
 local function registerWidget(eventId, addonName)
     if addonName ~= "LibAddonMenuOrderListBox" then return end
     em:UnregisterForEvent("LibAddonMenuOrderListBox_EVENT_ADD_ON_LOADED", EVENT_ADD_ON_LOADED)
+
+    cursorTLC = getCursorTLC()
 
     if not LAM:RegisterWidget("orderlistbox", widgetVersion) then return end
 end
