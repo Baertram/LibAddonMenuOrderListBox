@@ -18,9 +18,18 @@
     setFunc = function(currentSortedListEntries) db.currentSortedListEntries = currentSortedListEntries doStuff() end,
     tooltip = "OrderListBox's tooltip text.", -- or string id or function returning a string (optional)
     width = "full", -- or "half" (optional)
-    isExtraWide = true, -- boolean (optional)
+    isExtraWide = false, -- or function returning a boolean (optional). Show the listBox as extra wide box
     minHeight = function() return db.minHeightNumber end, --or number for the minimum height of this control. Default: 125 (optional)
     maxHeight = function() return db.maxHeightNumber end, --or number for the maximum height of this control. Default: value of minHeight (optional)
+    rowHeight = function() return db.rowHeightNumber end, --or number for the height of the row of the entries in listEntries. Default: 25 (optional)
+    rowTemplate = "LAM2_orderlistbox_widget_scrolllist_row", --String defining the XML virtual template control for a row of the listEntries (optional)
+    rowFont = "ZoFontWinH4", --or function returning a String of the font to use for the row (optional),
+    rowMaxLineCount = 1, --or function returning a number of the maximum text lines within the row. 1 = Only 1 text line, no wrapping, get#s truncated. (optional)
+    rowSelectionTemplate = "ZO_ThinListHighlight", --String defining the XML virtual template control for the selection at a row of the listEntries (optional)
+    rowSelectedCallback = function doStuffOnSelection(rowControl, previouslySelectedData, selectedData, reselectingDuringRebuild) end, --An optional callback function when a row of the listEntries got selected (optional)
+    rowHideCallback = function doStuffOnHide(rowControl, currentRowData) end, --An optional callback function when a row of the listEntries got hidden (optional)
+    dataTypeSelectSound = SOUNDS["NONE"], --or function returning a String of a sound from the global SOUNDS table. Will be played as any row containing the datatype (1) of the orderListBox will be selected (optional)
+    dataTypeResetControlCallback = function doStuffOnReset(control) end, --An optional callback function when the datatype control gets reset. (optional)
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
     warning = "May cause permanent awesomeness.", -- or string id or function returning a string (optional)
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
@@ -29,7 +38,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 2
+local widgetVersion = 3
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -82,11 +91,13 @@ local EVENT_HANDLER_NAMESPACE = "LAM2_OrderListBox_Event"
 --Constants visuals
 local LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE = 1
 
-local SORT_LIST_ROW_HEIGHT                  = 25
+local SORT_LIST_ROW_DEFAULT_HEIGHT          = 25
+local SORT_LIST_ROW_DEFAULT_FONT            = "ZoFontWinH4"
+local SORT_LIST_ROW_DEFAULT_MAXLINES        = 1
 local SORT_LIST_ROW_TEMPLATE_NAME           = "LAM2_orderlistbox_widget_scrolllist_row" --"ZO_SelectableLabel"
 local SORT_LIST_ROW_SELECTION_TEMPLATE_NAME = "ZO_ThinListHighlight"
 
-local MIN_HEIGHT                            = SORT_LIST_ROW_HEIGHT * 5
+local MIN_HEIGHT                            = SORT_LIST_ROW_DEFAULT_HEIGHT * 5
 
 
 
@@ -95,16 +106,27 @@ local MIN_HEIGHT                            = SORT_LIST_ROW_HEIGHT * 5
 ------------------------------------------------------------------------------------------------------------------------
 --Functions of the listBox data table
 local function getShowPositionInfoFromListBoxData(orderListBoxData)
-    local showPosition      = LAMgetDefaultValue(orderListBoxData.showPosition) or false
+    local showPosition = (orderListBoxData.showPosition ~= nil and LAMgetDefaultValue(orderListBoxData.showPosition)) or false
     return showPosition
 end
 
+local function getRowInfoFromOrderListBoxData(orderListBoxData)
+    local rowHeight = (orderListBoxData.rowHeight and LAMgetDefaultValue(orderListBoxData.rowHeight)) or SORT_LIST_ROW_DEFAULT_HEIGHT
+    local rowTemplate = (orderListBoxData.rowTemplate and LAMgetDefaultValue(orderListBoxData.rowTemplate)) or SORT_LIST_ROW_TEMPLATE_NAME
+    local rowFont = (orderListBoxData.rowFont and LAMgetDefaultValue(orderListBoxData.rowFont)) or SORT_LIST_ROW_DEFAULT_FONT
+    local rowMaxLineCount = (orderListBoxData.rowMaxLineCount and LAMgetDefaultValue(orderListBoxData.rowMaxLineCount)) or SORT_LIST_ROW_DEFAULT_MAXLINES
+    local rowSelectionTemplate = (orderListBoxData.rowSelectionTemplate and LAMgetDefaultValue(orderListBoxData.rowSelectionTemplate)) or SORT_LIST_ROW_SELECTION_TEMPLATE_NAME
+    local rowSelectedCallback = (orderListBoxData.rowSelectedCallback and LAMgetDefaultValue(orderListBoxData.rowSelectedCallback)) or nil
+    local dataTypeSelectSound = (orderListBoxData.dataTypeSelectSound and LAMgetDefaultValue(orderListBoxData.dataTypeSelectSound)) or nil
+    local rowHideCallback = (orderListBoxData.rowHideCallback and LAMgetDefaultValue(orderListBoxData.rowHideCallback)) or nil
+    local dataTypeResetControlCallback = (orderListBoxData.dataTypeResetControlCallback and LAMgetDefaultValue(orderListBoxData.dataTypeResetControlCallback)) or nil
+    return rowHeight, rowTemplate, rowFont, rowMaxLineCount, rowSelectionTemplate, rowSelectedCallback, rowHideCallback, dataTypeSelectSound, dataTypeResetControlCallback
+end
+
 local function getDisabledInfoFromListBoxData(orderListBoxData)
-    local disabledDrag      = LAMgetDefaultValue(orderListBoxData.disableDrag)
-    local isDragDisabled    = (disabledDrag ~=nil and disabledDrag) or false
-    local disableButtons    = LAMgetDefaultValue(orderListBoxData.disableButtons)
-    local areButtonsDisabled= (disableButtons ~=nil and disableButtons) or false
-    return isDragDisabled, areButtonsDisabled
+    local disabledDrag      = (orderListBoxData.disableDrag and LAMgetDefaultValue(orderListBoxData.disableDrag)) or false
+    local disableButtons    = (orderListBoxData.disableButtons and LAMgetDefaultValue(orderListBoxData.disableButtons)) or false
+    return disabledDrag, disableButtons
 end
 
 --Update & disabled
@@ -166,13 +188,8 @@ local function updateDisabledStateOfControls(control, disable)
 end
 
 local function UpdateDisabled(control)
-    local disable
-    if type(control.data.disabled) == "function" then
-        disable = control.data.disabled()
-    else
-        disable = control.data.disabled
-    end
-
+    local dataDisabled = control.data.disabled
+    local disable = (dataDisabled ~= nil and LAMgetDefaultValue(dataDisabled)) or false
     if disable then
         control.label:SetColor(ZO_DEFAULT_DISABLED_COLOR:UnpackRGBA())
     else
@@ -196,7 +213,7 @@ local function UpdateValue(control, forceDefault, value)
     updateOrderListBoxEntries(control, value)
     if requestRefresh == true then
         --after setting this value, let's refresh the others to see if any should be disabled or have their settings changed
-        LAM.util.RequestRefreshIfNeeded(control)
+        util.RequestRefreshIfNeeded(control)
     end
 end
 
@@ -229,12 +246,23 @@ function OrderListBox:Initialize(panel, control, orderListBoxData)
     self.panel = panel
     self.control = control
 
+    self.orderListBoxData = orderListBoxData
+
+    --Attributes of the orderListBoxData -> Set default values
+    -->Will be updated within self:Create() function (from orderListBoxData)
     self.disabled = false
     self.areButtonsDisabled = false
     self.isDragDisabled = false
     self.showPosition = false
-
-    self.orderListBoxData = orderListBoxData
+    self.rowHeight = SORT_LIST_ROW_DEFAULT_HEIGHT
+    self.rowTemplate = SORT_LIST_ROW_TEMPLATE_NAME
+    self.rowFont = SORT_LIST_ROW_DEFAULT_FONT
+    self.rowMaxLineCount = SORT_LIST_ROW_DEFAULT_MAXLINES
+    self.rowSelectionTemplate = SORT_LIST_ROW_SELECTION_TEMPLATE_NAME
+    self.rowSelectedCallback = nil
+    self.rowHideCallback = nil
+    self.dataTypeSelectSound = nil
+    self.dataTypeResetControlCallback = nil
 
     --Create the ZO_ScrollList with the move up and down buttons
     self.scrollListControl, self.moveUpButton, self.moveDownButton, self.moveTotalUpButton, self.moveTotalDownButton = self:Create(control, orderListBoxData)
@@ -272,10 +300,8 @@ function OrderListBox:Create(control, orderListBoxData)
             if selectedIndex == 1 then return end
         else
             --Is the selected entry the most bottom entry already?
-            local scrollListData = scrollListControl.data
-            if selectedIndex == #scrollListData then return end
+            if selectedIndex == #scrollListControl.data then return end
         end
-        --d(">calling MoveItem now...")
         selfVar:MoveItem(selectedIndex, isUp, nil, moveToTopOrBottom)
     end
 
@@ -290,7 +316,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveUpControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, -16)
     buttonMoveUpControl:SetHidden(true)
     buttonMoveUpControl:SetClickSound("Click")
-    buttonMoveUpControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].UP)}
+    buttonMoveUpControl.data = {tooltipText = util.GetStringFromValue(translations[lang].UP)}
     buttonMoveUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -318,7 +344,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, 12)
     buttonMoveDownControl:SetHidden(true)
     buttonMoveDownControl:SetClickSound("Click")
-    buttonMoveDownControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].DOWN)}
+    buttonMoveDownControl.data = {tooltipText = util.GetStringFromValue(translations[lang].DOWN)}
     buttonMoveDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -347,7 +373,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalUpControl:SetAnchor(BOTTOM, buttonMoveUpControl, TOP, 0, -4)
     buttonMoveTotalUpControl:SetHidden(true)
     buttonMoveTotalUpControl:SetClickSound("Click")
-    buttonMoveTotalUpControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].TOTAL_UP)}
+    buttonMoveTotalUpControl.data = {tooltipText = util.GetStringFromValue(translations[lang].TOTAL_UP)}
     buttonMoveTotalUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -375,7 +401,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalDownControl:SetAnchor(TOP, buttonMoveDownControl, BOTTOM, 0, 4)
     buttonMoveTotalDownControl:SetHidden(true)
     buttonMoveTotalDownControl:SetClickSound("Click")
-    buttonMoveTotalDownControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].TOTAL_DOWN)}
+    buttonMoveTotalDownControl.data = {tooltipText = util.GetStringFromValue(translations[lang].TOTAL_DOWN)}
     buttonMoveTotalDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -412,41 +438,33 @@ function OrderListBox:Create(control, orderListBoxData)
 	]]
     local dataTypeId = LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE
 
-    local templateName = SORT_LIST_ROW_TEMPLATE_NAME
-    local selectTemplate = SORT_LIST_ROW_SELECTION_TEMPLATE_NAME
+    --Get the row XML templates and callback functions, sound etc.
+    self.rowHeight, self.rowTemplate, self.rowFont, self.rowMaxLineCount, self.rowSelectionTemplate, self.rowSelectedCallback, self.rowHideCallback, self.dataTypeSelectSound, self.dataTypeResetControlCallback = getRowInfoFromOrderListBoxData(orderListBoxData)
 
-    local rowHeight = SORT_LIST_ROW_HEIGHT -- height of the rows
+    local templateName = self.rowTemplate
+    local selectTemplate = self.rowSelectionTemplate
 
-    local dataTypeSelectSound = nil
+    local rowHeight = self.rowHeight
 
-    local hideCallback = nil
-    local resetControlCallback = nil
+    local dataTypeSelectSound = self.dataTypeSelectSound
+
+    local rowHideCallback = self.rowHideCallback
+    local resetControlCallback = self.dataTypeResetControlCallback
+
     local setupFunction = function(control, data, scrollList)
         selfVar:RowSetupFunction(control, data, scrollList)
     end
     local selectCallback = function(previouslySelectedData, selectedData, reselectingDuringRebuild)
         --Check the disabled state of the LAM control and do not select any entry if it is disabled
         if selfVar.disabled then return end
-        self:OnRowSelected(previouslySelectedData, selectedData, reselectingDuringRebuild, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl)
+        selfVar:OnRowSelected(previouslySelectedData, selectedData, reselectingDuringRebuild, buttonMoveUpControl, buttonMoveDownControl, buttonMoveTotalUpControl, buttonMoveTotalDownControl)
+        if selfVar.rowSelectedCallback ~= nil and type(selfVar.rowSelectedCallback) == "function" then
+            selfVar.rowSelectedCallback(selfVar, previouslySelectedData, selectedData, reselectingDuringRebuild)
+        end
     end
 
-    ZO_ScrollList_AddDataType(scrollListControl, dataTypeId, templateName, rowHeight, setupFunction, hideCallback, dataTypeSelectSound, resetControlCallback)
+    ZO_ScrollList_AddDataType(scrollListControl, dataTypeId, templateName, rowHeight, setupFunction, rowHideCallback, dataTypeSelectSound, resetControlCallback)
     ZO_ScrollList_EnableSelection(scrollListControl, selectTemplate, selectCallback)
-
-    --[[
-        --Add a custom factoryFunction to the controlpool which was added for the ZO_ScrollList datatype "LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE"
-        local function customFactoryFunction(zoObjectPoolEntry)
-    d("[OrderListBox]customFactoryFunction")
-            --Add the drag & drop handlers
-            --for i = 1, control:GetNumChildren() do
-                --local child = control:GetChild(i)
-                zoObjectPoolEntry:SetHandler("OnDragStart", function() self:StartDragging(child) end)
-                zoObjectPoolEntry:SetHandler("OnDragStop", function() self:StopDragging() end)
-            --end
-        end
-        local objectPoolOfScrollListDataType = scrollListControl.dataTypes[dataTypeId].pool
-        objectPoolOfScrollListDataType:SetCustomFactoryBehavior(customFactoryFunction)
-    ]]
 
     --Will be done via UpdateValue -> GetFunc
     --self.masterList = self:Populate(orderListBoxData)
@@ -470,7 +488,7 @@ function OrderListBox:Populate(orderListBoxData)
         },
     ]]
 
-    --2 example entry
+    --2 example entries
     --[[
     if masterList == nil or #masterList == 0 then
         masterList[1] = {
@@ -498,7 +516,7 @@ end
 --------------------------------------------------
 function OrderListBox:UpdateScrollList(control, data, rowDataType, lamControl)
 --d("[LAM2]OrderListBox:UpdateScrollList")
-	--[[ 	Adds data to the datalist already stored in the control  rowtype is the typeId we assigned in CreateScrollListDataType.
+	--[[ 	Adds data to the datalist. Already stored in the control rowtype is the typeId we assigned in CreateScrollListDataType.
 
 			From LibScroll:
 			"Must use ZO_DeepTableCopy or it WILL crash if the user passes in a dataTable that is stored in saved variables.
@@ -517,11 +535,11 @@ function OrderListBox:UpdateScrollList(control, data, rowDataType, lamControl)
 		table.insert(dataList, entry) -- By using table.insert, we add to whatever data may already be there.
 	end
 
-	-- Sort if needed.  In our case we want to sort by name
+	-- Sort if needed.  In our case we want to sort by the text
 	--table.sort(dataList, function(a,b) return a.data.text < b.data.text end)
 
 	-- Redraw the scroll list.
-    -- Not if the LAM control is currently building, as the UpdateDisabled function will call the commit then!
+    --> Not if the LAM control is currently building, as the UpdateDisabled function will call the commit then!
     if lamControl.isBuilding == true then return end
 	ZO_ScrollList_Commit(control)
 end
@@ -531,8 +549,8 @@ end
 function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
     -- The rowControl, data, and scrollListControl are all supplied by the internal callback trigger
     -- What is contained in data is determined by the structure of the table of data items you used in the Populate function
-    rowControl:SetFont("ZoFontWinH4")
-    rowControl:SetMaxLineCount(1) -- Forces the text to only use one row.  If it goes longer, the extra will not display.
+    rowControl:SetFont(self.rowFont)
+    rowControl:SetMaxLineCount(self.rowMaxLineCount) -- 1 = Forces the text to only use one row
     if self.showPosition then
         rowControl:SetText(tostring(rowControl.index) .. ") " .. data.text)
     else
@@ -784,39 +802,29 @@ end
 --The orderlistbox widget
 ------------------------------------------------------------------------------------------------------------------------
 function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
-    local control = LAM.util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
+    local control = util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
     control.isBuilding = true
 
     local container = control.container
 
-    orderListBoxData.disableDrag    = orderListBoxData.disableDrag or false
-    orderListBoxData.disableButtons = orderListBoxData.disableButtons or false
-    orderListBoxData.disabled       = orderListBoxData.disabled or false
-
     local width = control:GetWidth()
-    local minHeight = (control.data.minHeight and LAM.util.GetDefaultValue(control.data.minHeight)) or MIN_HEIGHT
-    local maxHeight = (control.data.maxHeight and LAM.util.GetDefaultValue(control.data.maxHeight)) or (minHeight * 4)
+    local minHeight = (control.data.minHeight and util.GetDefaultValue(control.data.minHeight)) or MIN_HEIGHT
+    local maxHeight = (control.data.maxHeight and util.GetDefaultValue(control.data.maxHeight)) or (minHeight * 4)
 
-    local isExtraWide = orderListBoxData.isExtraWide or false
-    if isExtraWide then
+    local isExtraWide = (orderListBoxData.isExtraWide and LAMgetDefaultValue(orderListBoxData.isExtraWide)) or false
+    if isExtraWide == true then
         control.container:SetDimensionConstraints(width, minHeight, width, maxHeight)
-        --local MIN_WIDTH = (parent.GetWidth and (parent:GetWidth() / 10)) or (parent.panel.GetWidth and (parent.panel:GetWidth() / 10)) or 0
 
         control.label:ClearAnchors()
-        container:ClearAnchors()
-
-        --if orderListBoxData.isExtraWide then
-            container:SetAnchor(BOTTOMLEFT, control, BOTTOMLEFT, 0, 0)
-        --else
-        --    container:SetWidth(MIN_WIDTH * 3.2)
-        --end
-
         control.label:SetAnchor(TOPLEFT, control, TOPLEFT, 0, 0)
+
+        container:ClearAnchors()
+        container:SetAnchor(BOTTOMLEFT, control, BOTTOMLEFT, 0, 0)
         container:SetAnchor(BOTTOMRIGHT, control, BOTTOMRIGHT, 0, 0)
+
         if control.isHalfWidth then
             container:SetAnchor(BOTTOMRIGHT, control, BOTTOMRIGHT, 0, 0)
         end
-
         control:SetHeight(container:GetHeight() + control.label:GetHeight())
     else
         control:SetDimensionConstraints(width, minHeight, width, maxHeight)
@@ -825,16 +833,16 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     control:SetHandler("OnMouseEnter", function() ZO_Options_OnMouseEnter(control) end)
     control:SetHandler("OnMouseExit", function() ZO_Options_OnMouseExit(control) end)
 
-    control.orderListBox = OrderListBox:New(LAM.util.GetTopPanel(parent), control, orderListBoxData)
+    control.orderListBox = OrderListBox:New(util.GetTopPanel(parent), control, orderListBoxData)
 
     if orderListBoxData.warning ~= nil or orderListBoxData.requiresReload then
         control.warning = wm:CreateControlFromVirtual(nil, control, "ZO_Options_WarningIcon")
         control.warning:SetAnchor(RIGHT, control.container, LEFT, -5, 0)
-        control.UpdateWarning = LAM.util.UpdateWarning
+        control.UpdateWarning = util.UpdateWarning
         control:UpdateWarning()
     end
 
-    control.data.tooltipText = LAM.util.GetStringFromValue(orderListBoxData.tooltip)
+    control.data.tooltipText = util.GetStringFromValue(orderListBoxData.tooltip)
 
     control.UpdateValue = UpdateValue
     control:UpdateValue()
@@ -844,8 +852,8 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
 
     control.isBuilding = false
 
-    LAM.util.RegisterForRefreshIfNeeded(control)
-    LAM.util.RegisterForReloadIfNeeded(control)
+    util.RegisterForRefreshIfNeeded(control)
+    util.RegisterForReloadIfNeeded(control)
 
     return control
 end
