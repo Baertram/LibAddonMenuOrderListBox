@@ -806,7 +806,7 @@ function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
 end
 
 function OrderListBox:DragOnUpdateCallback(draggedControl)
---d("[LAM2OrderListBox]OnUpdate")
+    --d("[LAM2OrderListBox]OnUpdate")
     if self.disabled or self.isDragDisabled then
         disableOnUpdateHandler(self)
         return
@@ -814,6 +814,29 @@ function OrderListBox:DragOnUpdateCallback(draggedControl)
     --local x, y = GetUIMousePosition()
     --Anchor to GuiMouse
     self:UpdateCursorTLC(false, draggedControl)
+
+    --Check the actual shown rows of the list (contents)
+    --If we are above the row1, scroll up.
+    --If we are above the last row scroll down.
+    -->Not working properly as the rowControls in contents are not in the same order as the shown rows on screen.
+    -->Also activeControls of the scrollList does no provide the correct order...
+    -->So check the anchor's offsetY of the row of the contents. If between 0 and 50 -> Scroll up
+    -->If between contents:GetHeight()-50 and contents:GetHeight() -> Scroll down
+    local scrollListControl = self.scrollListControl
+    local contents = scrollListControl.contents
+    local numContentChildren = (contents ~= nil and contents:GetNumChildren()) or 0
+    local contentsHeight = contents:GetHeight()
+    if not contents or numContentChildren == 0 then return end
+    local controlBelowMouse = moc()
+    if not controlBelowMouse or not controlBelowMouse.GetParent or controlBelowMouse:GetParent() ~= contents then return end
+    local isValid, point, relTo, relPoint, offsetX, offsetY = controlBelowMouse:GetAnchor(0)
+    if offsetY >= 0 and offsetY <= 50 then
+        --Scroll up
+        ZO_ScrollList_ScrollRelative(scrollListControl, -40, nil, true)
+    elseif offsetY <= contentsHeight and offsetY >= contentsHeight - 50 then
+        --Scroll down
+        ZO_ScrollList_ScrollRelative(scrollListControl, 40, nil, true)
+    end
 end
 
 function OrderListBox:StartDragging(draggedControl, mouseButton)
