@@ -18,6 +18,7 @@
     setFunc = function(currentSortedListEntries) db.currentSortedListEntries = currentSortedListEntries doStuff() end,
     tooltip = "OrderListBox's tooltip text.", -- or string id or function returning a string (optional)
     width = "full", -- or "half" (optional)
+    isExtraWide = true, -- boolean (optional)
     minHeight = function() return db.minHeightNumber end, --or number for the minimum height of this control. Default: 125 (optional)
     maxHeight = function() return db.maxHeightNumber end, --or number for the maximum height of this control. Default: value of minHeight (optional)
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
@@ -28,7 +29,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 1
+local widgetVersion = 2
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -286,7 +287,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveUpControl:SetPressedTexture("/esoui/art/buttons/scrollbox_uparrow_down.dds")
     buttonMoveUpControl:SetDisabledTexture("/esoui/art/buttons/scrollbox_uparrow_up_disabled.dds")
     buttonMoveUpControl:SetPressedOffset(2, 2)
-    buttonMoveUpControl:SetAnchor(LEFT, scrollListControl, RIGHT, 3, -16)
+    buttonMoveUpControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, -16)
     buttonMoveUpControl:SetHidden(true)
     buttonMoveUpControl:SetClickSound("Click")
     buttonMoveUpControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].UP)}
@@ -314,7 +315,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetPressedTexture("/esoui/art/buttons/scrollbox_downarrow_down.dds")
     buttonMoveDownControl:SetDisabledTexture("/esoui/art/buttons/scrollbox_downarrow_up_disabled.dds")
     buttonMoveDownControl:SetPressedOffset(2, 2)
-    buttonMoveDownControl:SetAnchor(LEFT, scrollListControl, RIGHT, 3, 12)
+    buttonMoveDownControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, 12)
     buttonMoveDownControl:SetHidden(true)
     buttonMoveDownControl:SetClickSound("Click")
     buttonMoveDownControl.data = {tooltipText = LAM.util.GetStringFromValue(translations[lang].DOWN)}
@@ -335,7 +336,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetMouseEnabled(false)
 
     local buttonMoveTotalUpControl = wm:CreateControl(controlName .. "_ButtonMoveTotalUp", scrollListControl, CT_BUTTON)
-    buttonMoveTotalUpControl:SetDimensions(15, 15)
+    buttonMoveTotalUpControl:SetDimensions(16, 16)
     buttonMoveTotalUpControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
     buttonMoveTotalUpControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
     buttonMoveTotalUpControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
@@ -364,7 +365,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalUpControl:SetMouseEnabled(false)
 
     local buttonMoveTotalDownControl = wm:CreateControl(controlName .. "_ButtonMoveTotalDown", scrollListControl, CT_BUTTON)
-    buttonMoveTotalDownControl:SetDimensions(15, 15)
+    buttonMoveTotalDownControl:SetDimensions(16, 16)
     buttonMoveTotalDownControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
     buttonMoveTotalDownControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
     buttonMoveTotalDownControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
@@ -786,11 +787,40 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     local control = LAM.util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
     control.isBuilding = true
 
+    local container = control.container
+
     orderListBoxData.disableDrag    = orderListBoxData.disableDrag or false
     orderListBoxData.disableButtons = orderListBoxData.disableButtons or false
     orderListBoxData.disabled       = orderListBoxData.disabled or false
 
     local width = control:GetWidth()
+    local minHeight = (control.data.minHeight and LAM.util.GetDefaultValue(control.data.minHeight)) or MIN_HEIGHT
+    local maxHeight = (control.data.maxHeight and LAM.util.GetDefaultValue(control.data.maxHeight)) or (minHeight * 4)
+
+    local isExtraWide = orderListBoxData.isExtraWide or false
+    if isExtraWide then
+        control.container:SetDimensionConstraints(width, minHeight, width, maxHeight)
+        --local MIN_WIDTH = (parent.GetWidth and (parent:GetWidth() / 10)) or (parent.panel.GetWidth and (parent.panel:GetWidth() / 10)) or 0
+
+        control.label:ClearAnchors()
+        container:ClearAnchors()
+
+        --if orderListBoxData.isExtraWide then
+            container:SetAnchor(BOTTOMLEFT, control, BOTTOMLEFT, 0, 0)
+        --else
+        --    container:SetWidth(MIN_WIDTH * 3.2)
+        --end
+
+        control.label:SetAnchor(TOPLEFT, control, TOPLEFT, 0, 0)
+        container:SetAnchor(BOTTOMRIGHT, control, BOTTOMRIGHT, 0, 0)
+        if control.isHalfWidth then
+            container:SetAnchor(BOTTOMRIGHT, control, BOTTOMRIGHT, 0, 0)
+        end
+
+        control:SetHeight(container:GetHeight() + control.label:GetHeight())
+    else
+        control:SetDimensionConstraints(width, minHeight, width, maxHeight)
+    end
 
     control:SetHandler("OnMouseEnter", function() ZO_Options_OnMouseEnter(control) end)
     control:SetHandler("OnMouseExit", function() ZO_Options_OnMouseExit(control) end)
@@ -803,10 +833,6 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         control.UpdateWarning = LAM.util.UpdateWarning
         control:UpdateWarning()
     end
-
-    local minHeight = (control.data.minHeight and LAM.util.GetDefaultValue(control.data.minHeight)) or MIN_HEIGHT
-    local maxHeight = (control.data.maxHeight and LAM.util.GetDefaultValue(control.data.maxHeight)) or (minHeight * 4)
-    control:SetDimensionConstraints(width, minHeight, width, maxHeight)
 
     control.data.tooltipText = LAM.util.GetStringFromValue(orderListBoxData.tooltip)
 
@@ -832,4 +858,3 @@ local function registerWidget(eventId, addonName)
 end
 
 em:RegisterForEvent("LibAddonMenuOrderListBox_EVENT_ADD_ON_LOADED", EVENT_ADD_ON_LOADED, registerWidget)
-
