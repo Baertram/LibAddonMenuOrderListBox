@@ -811,16 +811,15 @@ function OrderListBox:DragOnUpdateCallback(draggedControl)
         disableOnUpdateHandler(self)
         return
     end
+
+    --TODO: Only run the following code once every second!
+
     --local x, y = GetUIMousePosition()
     --Anchor to GuiMouse
     self:UpdateCursorTLC(false, draggedControl)
 
     --Check the actual shown rows of the list (contents)
-    --If we are above the row1, scroll up.
-    --If we are above the last row scroll down.
-    -->Not working properly as the rowControls in contents are not in the same order as the shown rows on screen.
-    -->Also activeControls of the scrollList does no provide the correct order...
-    -->So check the anchor's offsetY of the row of the contents. If between 0 and 50 -> Scroll up
+    -->Check the anchor's offsetY of the row of the contents. If between 0 and 50 -> Scroll up
     -->If between contents:GetHeight()-50 and contents:GetHeight() -> Scroll down
     local scrollListControl = self.scrollListControl
     local contents = scrollListControl.contents
