@@ -778,8 +778,8 @@ function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
     cursorTLC:SetResizeToFitDescendents(true)
     if not isHidden then
         cursorTLC:SetAnchor(LEFT, GuiMouse, RIGHT, 5, 0)
-        cursorTLCLabel:SetText(self.draggingText or "Hallo Welt")
-        local textWidth = (cursorTLCLabel:GetTextWidth() or 150) + 2
+        cursorTLCLabel:SetText(self.draggingText)
+        local textWidth = (cursorTLCLabel:GetTextWidth()) + 2
         cursorTLCLabel:SetWidth(textWidth)
         cursorTLCLabel:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
         cursorTLC:SetWidth(textWidth)
