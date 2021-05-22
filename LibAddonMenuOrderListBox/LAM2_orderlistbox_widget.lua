@@ -38,7 +38,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 3
+local widgetVersion = 4
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -231,10 +231,25 @@ local function clearDragging(selfVar)
     selfVar.draggingEntryId = nil
     selfVar.draggingSortListContents = nil
     selfVar.draggingText = nil
+    selfVar.draggingUpdateTime = nil
 end
 local function abortDragging(selfVar)
     clearDragging(selfVar)
     selfVar:StopDragging()
+end
+
+local function disableOnUpdateHandler(orderListBoxObject)
+    cursorTLC.orderListBox = nil
+    clearDragging(orderListBoxObject)
+
+    orderListBoxObject:UpdateCursorTLC(true, nil)
+    orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
+end
+
+local function checkIfDraggedAndDisableUpdateHandler(lamPanel)
+    local orderListBoxObject = cursorTLC.orderListBox
+    if orderListBoxObject == nil or orderListBoxObject.draggingEntryId == nil then return end
+    disableOnUpdateHandler(orderListBoxObject)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -753,10 +768,30 @@ function OrderListBox:UpdateMoveButtonsEnabledState(newIndex)
     end
 end
 
-
-local function disableOnUpdateHandler(orderListBoxObject)
-    orderListBoxObject:UpdateCursorTLC(true, nil)
-    orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
+--Auto scroll the orderListBox upon dragging an entry to the top/bottom of the list
+local function autoScroll(orderListBoxVar)
+--d(">autoscroll")
+    local scrollListControl = orderListBoxVar.scrollListControl
+    local contents = scrollListControl.contents
+    local numContentChildren = (contents ~= nil and contents:GetNumChildren()) or 0
+    local contentsHeight = contents:GetHeight()
+    if not contents or numContentChildren == 0 then return end
+    local controlBelowMouse = moc()
+    if not controlBelowMouse or not controlBelowMouse.GetParent or controlBelowMouse:GetParent() ~= contents then return end
+    local isValid, point, relTo, relPoint, offsetX, offsetY = controlBelowMouse:GetAnchor(0)
+    local orderListBoxRowHeight = orderListBoxVar.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT
+    local orderListBoxScrollArea = orderListBoxRowHeight * 1.5
+    local scrollValue
+    if offsetY < 0 or (offsetY >= 0 and offsetY <= orderListBoxScrollArea) then
+        --Scroll up
+        scrollValue = (orderListBoxRowHeight * 2) * -1
+    elseif offsetY <= contentsHeight and offsetY >= contentsHeight - orderListBoxScrollArea then
+        --Scroll down
+        scrollValue = orderListBoxRowHeight * 2
+    end
+    if scrollValue == nil or scrollValue == 0 then return end
+--d(">scrollValue: " ..tostring(scrollValue))
+    ZO_ScrollList_ScrollRelative(scrollListControl, scrollValue, nil, true)
 end
 
 function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt, shift, command)
@@ -774,6 +809,7 @@ end
 
 function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
     if cursorTLC == nil then getCursorTLC() end
+    cursorTLC.orderListBox = self
     cursorTLC:ClearAnchors()
     cursorTLC:SetResizeToFitDescendents(true)
     if not isHidden then
@@ -806,35 +842,32 @@ function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
 end
 
 function OrderListBox:DragOnUpdateCallback(draggedControl)
-    --d("[LAM2OrderListBox]OnUpdate")
+
     if self.disabled or self.isDragDisabled then
         disableOnUpdateHandler(self)
         return
     end
 
-    --TODO: Only run the following code once every second!
-
-    --local x, y = GetUIMousePosition()
-    --Anchor to GuiMouse
-    self:UpdateCursorTLC(false, draggedControl)
-
     --Check the actual shown rows of the list (contents)
-    -->Check the anchor's offsetY of the row of the contents. If between 0 and 50 -> Scroll up
-    -->If between contents:GetHeight()-50 and contents:GetHeight() -> Scroll down
-    local scrollListControl = self.scrollListControl
-    local contents = scrollListControl.contents
-    local numContentChildren = (contents ~= nil and contents:GetNumChildren()) or 0
-    local contentsHeight = contents:GetHeight()
-    if not contents or numContentChildren == 0 then return end
-    local controlBelowMouse = moc()
-    if not controlBelowMouse or not controlBelowMouse.GetParent or controlBelowMouse:GetParent() ~= contents then return end
-    local isValid, point, relTo, relPoint, offsetX, offsetY = controlBelowMouse:GetAnchor(0)
-    if offsetY >= 0 and offsetY <= 50 then
-        --Scroll up
-        ZO_ScrollList_ScrollRelative(scrollListControl, -40, nil, true)
-    elseif offsetY <= contentsHeight and offsetY >= contentsHeight - 50 then
-        --Scroll down
-        ZO_ScrollList_ScrollRelative(scrollListControl, 40, nil, true)
+    -->Check the anchor's offsetY of the row of the contents. If between 0 and 2*rowHeight -> Scroll up
+    -->If between contents:GetHeight()- 2*rowHeight and contents:GetHeight() -> Scroll down
+    --Only run the following code once every 500 MS!
+    local gameTimeMS = GetGameTimeMilliseconds()
+    local gameTimeDeltaNeeded = 200 --milliseconds
+--d("[LAM2OrderListBox]OnUpdate-gameTime: " ..tostring(gameTimeMS) .. ", self.draggingUpdateTime: " ..tostring(self.draggingUpdateTime))
+    local updateAutoScroll = false
+    if self.draggingUpdateTime == nil then
+        self.draggingUpdateTime = gameTimeMS
+        updateAutoScroll = true
+    elseif self.draggingUpdateTime > 0 then
+        if gameTimeMS >= (self.draggingUpdateTime + gameTimeDeltaNeeded) then
+            self.draggingUpdateTime = gameTimeMS
+            updateAutoScroll = true
+        end
+    end
+--d(">updateAutoScroll: " .. tostring(updateAutoScroll) ..", needed: " ..tostring(self.draggingUpdateTime + gameTimeDeltaNeeded))
+    if updateAutoScroll == true then
+        autoScroll(self)
     end
 end
 
@@ -846,7 +879,9 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     self.draggingEntryId            = draggedControl.index
     self.draggingSortListContents   = draggedControl:GetParent()
     self.draggingText               = draggedControl.dataEntry.data.text
-    self.draggingXStart, self.draggingYStart = GetUIMousePosition()
+
+    --Anchor the TLC with the label of the dragged row element to GuiMouse
+    self:UpdateCursorTLC(false, draggedControl)
 
     wm:SetMouseCursor(MOUSE_CURSOR_RESIZE_NS)
     --Unselect any selected entry
@@ -855,6 +890,8 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     --If not: End the drag&drop
     em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP, function(...) selfVar:OnGlobalMouseUpDuringDrag(...) end)
 
+    --Set the OnUpdate handler to check for the autosroll position of the cursor
+    self.draggingUpdateTime = nil
     self.scrollListControl:SetHandler("OnUpdate", function() selfVar:DragOnUpdateCallback(draggedControl) end)
 end
 
@@ -954,6 +991,8 @@ local function registerWidget(eventId, addonName)
     cursorTLC = getCursorTLC()
 
     if not LAM:RegisterWidget("orderlistbox", widgetVersion) then return end
+    --Register a callback to the close of the LAM panel to hide a dragged control e.g. if ESC key was pressed
+    cm:RegisterCallback("LAM-PanelClosed", checkIfDraggedAndDisableUpdateHandler)
 end
 
 em:RegisterForEvent("LibAddonMenuOrderListBox_EVENT_ADD_ON_LOADED", EVENT_ADD_ON_LOADED, registerWidget)
