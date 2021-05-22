@@ -206,11 +206,10 @@ end
 
 local function disableOnUpdateHandler(orderListBoxObject)
     em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP)
-
-    cursorTLC.orderListBox = nil
-
-    orderListBoxObject:UpdateCursorTLC(true, nil)
     orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
+
+    --Hide the label control at the cursor again
+    orderListBoxObject:UpdateCursorTLC(true, nil)
 end
 
 local function abortDragging(orderListBoxObject)
@@ -805,21 +804,23 @@ function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt,
     if self.disabled or self.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then
         abortDragging(self)
+        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
     end
     if self.draggingEntryId and self.draggingSortListContents then
         local controlBelowMouse = moc()
         if not controlBelowMouse or controlBelowMouse and controlBelowMouse:GetParent() ~= self.draggingSortListContents then
             abortDragging(self)
+            wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
         end
     end
 end
 
 function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
     if cursorTLC == nil then getCursorTLC() end
-    cursorTLC.orderListBox = self
     cursorTLC:ClearAnchors()
     cursorTLC:SetResizeToFitDescendents(true)
     if not isHidden then
+        cursorTLC.orderListBox = self
         cursorTLC:SetAnchor(LEFT, GuiMouse, RIGHT, 5, 0)
         cursorTLCLabel:SetText(self.draggingText)
         local textWidth = (cursorTLCLabel:GetTextWidth()) + 2
@@ -837,6 +838,7 @@ function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
         cursorTLC:SetDrawLevel(5)
         cursorTLC:SetAlpha(0.7)
     else
+        cursorTLC.orderListBox = nil
         cursorTLC:SetDimensions(0, 0)
         cursorTLCLabel:SetText("")
         cursorTLC:SetDrawTier(DT_LOW)
