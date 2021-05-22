@@ -196,6 +196,35 @@ local function updateDisabledStateOfControls(control, disable)
     ZO_ScrollList_Commit(scrollList)
 end
 
+--Drag & drop functions
+local function clearDragging(selfVar)
+    selfVar.draggingEntryId = nil
+    selfVar.draggingSortListContents = nil
+    selfVar.draggingText = nil
+    selfVar.draggingUpdateTime = nil
+end
+
+local function disableOnUpdateHandler(orderListBoxObject)
+    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP)
+
+    cursorTLC.orderListBox = nil
+
+    orderListBoxObject:UpdateCursorTLC(true, nil)
+    orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
+end
+
+local function abortDragging(orderListBoxObject)
+    disableOnUpdateHandler(orderListBoxObject)
+    clearDragging(orderListBoxObject)
+end
+
+local function checkIfDraggedAndDisableUpdateHandler(lamPanel)
+    local orderListBoxObject = cursorTLC.orderListBox
+    if orderListBoxObject == nil or orderListBoxObject.draggingEntryId == nil then return end
+    abortDragging(orderListBoxObject)
+end
+
+
 local function UpdateDisabled(control)
     local dataDisabled = control.data.disabled
     local disable = (dataDisabled ~= nil and LAMgetDefaultValue(dataDisabled)) or false
@@ -204,6 +233,9 @@ local function UpdateDisabled(control)
     else
         control.label:SetColor(ZO_DEFAULT_ENABLED_COLOR:UnpackRGBA())
     end
+    local orderListBox = control.orderListBox
+    abortDragging(orderListBox)
+
     updateDisabledStateOfControls(control, disable)
 end
 
@@ -224,32 +256,6 @@ local function UpdateValue(control, forceDefault, value)
         --after setting this value, let's refresh the others to see if any should be disabled or have their settings changed
         util.RequestRefreshIfNeeded(control)
     end
-end
-
---Drag & drop functions
-local function clearDragging(selfVar)
-    selfVar.draggingEntryId = nil
-    selfVar.draggingSortListContents = nil
-    selfVar.draggingText = nil
-    selfVar.draggingUpdateTime = nil
-end
-local function abortDragging(selfVar)
-    clearDragging(selfVar)
-    selfVar:StopDragging()
-end
-
-local function disableOnUpdateHandler(orderListBoxObject)
-    cursorTLC.orderListBox = nil
-    clearDragging(orderListBoxObject)
-
-    orderListBoxObject:UpdateCursorTLC(true, nil)
-    orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
-end
-
-local function checkIfDraggedAndDisableUpdateHandler(lamPanel)
-    local orderListBoxObject = cursorTLC.orderListBox
-    if orderListBoxObject == nil or orderListBoxObject.draggingEntryId == nil then return end
-    disableOnUpdateHandler(orderListBoxObject)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -797,14 +803,15 @@ end
 function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt, shift, command)
 --d("[OrderListBox]OnGlobalMouseUpDuringDrag - draggedIndex: " ..tostring(self.draggingEntryId))
     if self.disabled or self.isDragDisabled then return end
-    if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then abortDragging() end
+    if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then
+        abortDragging(self)
+    end
     if self.draggingEntryId and self.draggingSortListContents then
         local controlBelowMouse = moc()
         if not controlBelowMouse or controlBelowMouse and controlBelowMouse:GetParent() ~= self.draggingSortListContents then
-            clearDragging(self)
+            abortDragging(self)
         end
     end
-    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP)
 end
 
 function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
@@ -844,7 +851,7 @@ end
 function OrderListBox:DragOnUpdateCallback(draggedControl)
 
     if self.disabled or self.isDragDisabled then
-        disableOnUpdateHandler(self)
+        abortDragging(self)
         return
     end
 
@@ -897,8 +904,8 @@ end
 
 
 function OrderListBox:StopDragging(draggedOnToControl, mouseButton)
-    disableOnUpdateHandler(self)
     if self.disabled or self.isDragDisabled then return end
+    disableOnUpdateHandler(self)
     wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
     if mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId and self.draggingSortListContents then
         --local totalDeltaX = GetUIMousePosition() - self.draggingXStart
@@ -907,8 +914,8 @@ function OrderListBox:StopDragging(draggedOnToControl, mouseButton)
 --d("[OrderListBox]StopDragging -- from index: " ..tostring(self.draggingEntryId) .." to index: " ..tostring(draggedOnToControl.index))
         --Remove the entry at index self.draggingEntryId and insert it at draggedOnToControl.dataEntry.data.index
         self:MoveItem(self.draggingEntryId, nil, draggedOnToControl.index, nil)
-        clearDragging(self)
     end
+    clearDragging(self)
 end
 
 
