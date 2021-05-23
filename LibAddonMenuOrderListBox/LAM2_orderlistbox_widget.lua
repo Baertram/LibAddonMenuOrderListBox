@@ -38,7 +38,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 4
+local widgetVersion = 3
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
