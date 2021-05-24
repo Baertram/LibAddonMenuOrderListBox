@@ -1,7 +1,7 @@
 ## APIVersion: 100034 100035
 ## Title: LibAddonMenu-2.0 - OrderListBox
-## Version: 4
-## AddOnVersion: 004
+## Version: 5
+## AddOnVersion: 005
 ## IsLibrary: true
 ## DependsOn: LibAddonMenu-2.0>=32
 ## Author: Baertram
@@ -13,5 +13,5 @@
 ##
 ## You can read the full terms at https://account.elderscrollsonline.com/add-on-terms
 
-LAM2_orderlistbox_widget.lua
 LAM2_orderlistbox_widget.xml
+LAM2_orderlistbox_widget.lua

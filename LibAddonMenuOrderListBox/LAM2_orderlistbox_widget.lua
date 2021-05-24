@@ -38,7 +38,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 3
+local widgetVersion = 5
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -108,6 +108,7 @@ local cursorTLCLabel
 --Functions of the cursor UI related TLC
 local function getCursorTLC()
     cursorTLC = wm:GetControlByName("LAM2_orderlistbox_widget_cursor_TLC", nil)
+    if not cursorTLC then return end
     cursorTLCLabel = GetControl(cursorTLC, "Label")
     cursorTLC:ClearAnchors()
     cursorTLC:SetDimensions(0, 0)
@@ -218,6 +219,8 @@ local function abortDragging(orderListBoxObject)
 end
 
 local function checkIfDraggedAndDisableUpdateHandler(lamPanel)
+    if cursorTLC == nil then getCursorTLC() end
+    if not cursorTLC then return end
     local orderListBoxObject = cursorTLC.orderListBox
     if orderListBoxObject == nil or orderListBoxObject.draggingEntryId == nil then return end
     abortDragging(orderListBoxObject)
@@ -817,6 +820,7 @@ end
 
 function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
     if cursorTLC == nil then getCursorTLC() end
+    if not cursorTLC then return end
     cursorTLC:ClearAnchors()
     cursorTLC:SetResizeToFitDescendents(true)
     if not isHidden then
