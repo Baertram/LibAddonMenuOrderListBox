@@ -84,15 +84,24 @@ local translations = {
         TOTAL_DOWN      = moveText .. " ко дну",
     },
 }
+--Widget constants
+local widgetPrefix = "LAM2_OrderListBox_Widget"
+--Error constants
 local errorTexts = {
-    ["no_line_text_given"] = "Error: No text given for this line"
+    ["no_line_text_given"]              = "No text given for this line",
+    ["no_list_entries"]                 = "List entries are empty!",
+    ["list_entry_no_table"]             = "List entry is no table, index: \'%s\'",
+    ["list_entry_field_missing"]        = "List entry field is missing, index: \'%s\' - field: \'%s\'!",
+    ["list_entry_field_format_wrong"]   = "List entry field format is wrong, index: \'%s\' - field: \'%s\'=%s. Needs to be: \'%s\'!",
 }
 
 local lang = string.lower(GetCVar("Language.2"))
 local translation = (translations[lang] ~= nil and translations[lang]) or translations["en"]
 
 --Event handler constants
-local EVENT_HANDLER_NAMESPACE = "LAM2_OrderListBox_Event"
+local EVENT_HANDLER_NAMESPACE = widgetPrefix  .. "_Event"
+local globalMouseDown   = "_GLOBAL_MOUSE_DOWN"
+local globalMouseUp     = "_GLOBAL_MOUSE_UP"
 
 --Constants visuals
 local LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE = 1
@@ -100,14 +109,14 @@ local LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE = 1
 local SORT_LIST_ROW_DEFAULT_HEIGHT          = 25
 local SORT_LIST_ROW_DEFAULT_FONT            = "ZoFontWinH4"
 local SORT_LIST_ROW_DEFAULT_MAXLINES        = 1
-local SORT_LIST_ROW_TEMPLATE_NAME           = "LAM2_orderlistbox_widget_scrolllist_row" --"ZO_SelectableLabel"
+local SORT_LIST_ROW_TEMPLATE_NAME           = widgetPrefix .. "_Scrolllist_Row" --"ZO_SelectableLabel"
 local SORT_LIST_ROW_SELECTION_TEMPLATE_NAME = "ZO_ThinListHighlight"
 
 local MIN_HEIGHT                            = SORT_LIST_ROW_DEFAULT_HEIGHT * 5
 
-local mouseCursorHand       = MOUSE_CURSOR_UI_HAND
-local mouseCursorDoNotCare  = MOUSE_CURSOR_DO_NOT_CARE
-local mouseCursorResizeNS   = MOUSE_CURSOR_RESIZE_NS
+local mouseCursorHand           = MOUSE_CURSOR_UI_HAND
+local mouseCursorDoNotCare      = MOUSE_CURSOR_DO_NOT_CARE
+local mouseCursorResizeNS       = MOUSE_CURSOR_RESIZE_NS
 
 local scrollboxUpTexture        = "/esoui/art/buttons/scrollbox_uparrow_%s.dds"
 local scrollboxDownTexture      = "/esoui/art/buttons/scrollbox_downarrow_%s.dds"
@@ -119,6 +128,36 @@ local cursorTLCLabel
 ------------------------------------------------------------------------------------------------------------------------
 --Local helper functions
 ------------------------------------------------------------------------------------------------------------------------
+--Error handling
+local function errorOutput(errorTextName, values)
+    local errorOutputText = errorTexts[errorTextName]
+    if errorOutputText and errorOutputText ~= "" then
+        if values ~= nil then
+            errorOutputText = string.format(errorOutputText, unpack(values))
+        end
+        d("["..widgetPrefix .. "] ERROR - " .. errorOutputText)
+    end
+end
+
+local function checkOrderListBoxEntriesForCorrectFormat(listEntries)
+    assert(listEntries ~= nil, errorOutput("no_list_entries", nil))
+    for idx, listEntry in ipairs(listEntries) do
+        assert(type(listEntry) == "table", errorOutput("list_entry_no_table", {idx}))
+        local uniqueKey = listEntry.uniqueKey
+        assert(uniqueKey ~= nil, errorOutput("list_entry_field_missing", {idx, "uniqueKey"}))
+        assert(type(uniqueKey) == "number", errorOutput("list_entry_field_format_wrong", {idx, "uniqueKey", tostring(uniqueKey), "number"}))
+        local value = listEntry.value
+        assert(value ~= nil, errorOutput("list_entry_field_missing", {idx, "value"}))
+        local text = listEntry.text
+        assert(text ~= nil, errorOutput("list_entry_field_missing", {idx, "text"}))
+        assert(type(text) == "String", errorOutput("list_entry_field_format_wrong", {idx, "text", tostring(text), "String"}))
+        local tooltip = listEntry.tooltip
+        if tooltip ~= nil then
+            assert(type(tooltip) == "String", errorOutput("list_entry_field_format_wrong", {idx, "tooltip", tostring(tooltip), "String"}))
+        end
+    end
+end
+
 --Functions of the cursor UI related TLC
 local function setMouseCursor(cursorName)
     wm:SetMouseCursor(cursorName)
@@ -231,8 +270,8 @@ local function clearDragging(selfVar)
 end
 
 local function disableOnUpdateHandlerAndResetMouseCursor(orderListBoxObject)
-    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_DOWN", EVENT_GLOBAL_MOUSE_DOWN)
-    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP)
+    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. globalMouseDown, EVENT_GLOBAL_MOUSE_DOWN)
+    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. globalMouseUp, EVENT_GLOBAL_MOUSE_UP)
     orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
 
     --Hide the label control at the cursor again
@@ -568,6 +607,9 @@ function OrderListBox:Populate(orderListBoxData)
         }
     end
     ]]
+
+    --Check if the row's data table is of the correct format or got errors
+    checkOrderListBoxEntriesForCorrectFormat(masterList)
 
     return masterList
 end
@@ -957,8 +999,8 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     ZO_ScrollList_SelectData(self.scrollListControl, nil, nil, nil, true)
     --Enable a global MouseUp check and see if the mouse is above the ZO_SortList where the drag started
     --If not: End the drag&drop
-    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_DOWN", EVENT_GLOBAL_MOUSE_DOWN, function(...) selfVar:OnGlobalMouseDownDuringDrag(...) end)
-    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP, function(...) selfVar:OnGlobalMouseUpDuringDrag(...) end)
+    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. globalMouseDown, EVENT_GLOBAL_MOUSE_DOWN, function(...) selfVar:OnGlobalMouseDownDuringDrag(...) end)
+    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. globalMouseUp, EVENT_GLOBAL_MOUSE_UP, function(...) selfVar:OnGlobalMouseUpDuringDrag(...) end)
 
     --Set the OnUpdate handler to check for the autosroll position of the cursor
     self.draggingUpdateTime = nil

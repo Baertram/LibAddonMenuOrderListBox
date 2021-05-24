@@ -1,7 +1,7 @@
 <GuiXml>
     <Controls>
         <!-- Virtual row for the ZO_SortList of this widget -->
-        <Label name="LAM2_orderlistbox_widget_scrolllist_row" mouseEnabled="true" virtual="true" color="INTERFACE_COLOR_TYPE_TEXT_COLORS:INTERFACE_TEXT_COLOR_NORMAL">
+        <Label name="LAM2_OrderListBox_Widget_Scrolllist_Row" mouseEnabled="true" virtual="true" color="INTERFACE_COLOR_TYPE_TEXT_COLORS:INTERFACE_TEXT_COLOR_NORMAL">
             <OnInitialized>
                 ZO_SelectableLabel_OnInitialized(self)
             </OnInitialized>
@@ -21,7 +21,7 @@
         </Label>
 
         <!--TLC for the label at the cursor -->
-		<TopLevelControl name="LAM2_orderlistbox_widget_cursor_TLC" mouseEnabled="false" hidden="true" resizeToFitDescendents="true">
+		<TopLevelControl name="LAM2_OrderListBox_Widget_Cursor_TLC" mouseEnabled="false" hidden="true" resizeToFitDescendents="true">
 			<Dimensions x="0" y="0" />
 			<Controls>
                 <Label name="$(parent)Label" font="ZoFontGame" color="INTERFACE_COLOR_TYPE_TEXT_COLORS:INTERFACE_TEXT_COLOR_SELECTED" horizontalAlignment="LEFT" text="">
