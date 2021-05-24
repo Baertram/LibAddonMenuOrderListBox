@@ -38,7 +38,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 5
+local widgetVersion = 6
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -64,22 +64,22 @@ local translations = {
         TOTAL_DOWN      = "Zum Ende " .. moveTextLower,
     },
     ["jp"] = {
-        UP              = moveText .. " up",
-        DOWN            = moveText .. " down",
-        TOTAL_UP        = moveText .. " to top",
-        TOTAL_DOWN      = moveText .. " to bottom",
+        UP              = moveText .. " 上",
+        DOWN            = moveText .. " 下へ",
+        TOTAL_UP        = moveText .. " 頂点に",
+        TOTAL_DOWN      = moveText .. " 一番下に",
     },
     ["fr"] = {
-        UP              = moveText .. " up",
-        DOWN            = moveText .. " down",
-        TOTAL_UP        = moveText .. " to top",
-        TOTAL_DOWN      = moveText .. " to bottom",
+        UP              = moveText .. " en haut",
+        DOWN            = moveText .. " en bas",
+        TOTAL_UP        = moveText .. " jusqu'au sommet",
+        TOTAL_DOWN      = moveText .. " vers le bas",
     },
     ["ru"] = {
-        UP              = moveText .. " up",
-        DOWN            = moveText .. " down",
-        TOTAL_UP        = moveText .. " to top",
-        TOTAL_DOWN      = moveText .. " to bottom",
+        UP              = moveText .. " вверх",
+        DOWN            = moveText .. " вниз",
+        TOTAL_UP        = moveText .. " наверх",
+        TOTAL_DOWN      = moveText .. " ко дну",
     },
 }
 local lang = string.lower(GetCVar("Language.2"))
@@ -712,7 +712,6 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBo
 
     local wasMovedToLastEntry = newIndex == maxEntries
     local wasMovedToFirstEntry = newIndex == 1
-
 
     zo_callLater(function()
         local scrollBar = scrollListControl.scrollbar
