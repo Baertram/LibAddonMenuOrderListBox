@@ -713,14 +713,17 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBo
     local wasMovedToLastEntry = newIndex == maxEntries
     local wasMovedToFirstEntry = newIndex == 1
 
---d(">wasMovedToLastEntry: " ..tostring(wasMovedToLastEntry) .. ", wasMovedToFirstEntry: " ..tostring(wasMovedToFirstEntry) .. ", moveUp: " ..tostring(moveUp))
 
     zo_callLater(function()
         local scrollBar = scrollListControl.scrollbar
+        local valueMin, valueMax = scrollBar:GetMinMax()
+        valueMin = valueMin or 0
+        valueMax = valueMax or 9999
+--d(">wasMovedToLastEntry: " ..tostring(wasMovedToLastEntry) .. ", wasMovedToFirstEntry: " ..tostring(wasMovedToFirstEntry) .. ", moveUp: " ..tostring(moveUp) .. ", valueMin/valueMax: " ..tostring(valueMin).."/" ..tostring(valueMax))
+
         if moveUp == nil then
             --Select the dragged & dropped entry now
             if wasMovedToLastEntry then
-                local valueMax = scrollBar.valueMax
                 ZO_ScrollList_ScrollAbsolute(scrollListControl, valueMax)
                 ZO_ScrollList_SelectData(scrollListControl, scrollListControl.data[newIndex].data, nil, nil, true)
             elseif wasMovedToFirstEntry then
@@ -731,7 +734,6 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBo
             end
         else
             if wasMovedToLastEntry then
-                local valueMax = scrollBar.valueMax
                 ZO_ScrollList_ScrollAbsolute(scrollListControl, valueMax)
                 ZO_ScrollList_SelectData(scrollListControl, scrollListControl.data[newIndex].data, nil, nil, true)
             elseif wasMovedToFirstEntry then
