@@ -203,9 +203,11 @@ local function clearDragging(selfVar)
     selfVar.draggingSortListContents = nil
     selfVar.draggingText = nil
     selfVar.draggingUpdateTime = nil
+    selfVar.mouseButtonPressed = nil
 end
 
-local function disableOnUpdateHandler(orderListBoxObject)
+local function disableOnUpdateHandlerAndResetMouseCursor(orderListBoxObject)
+    em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_DOWN", EVENT_GLOBAL_MOUSE_DOWN)
     em:UnregisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP)
     orderListBoxObject.scrollListControl:SetHandler("OnUpdate", nil)
 
@@ -214,7 +216,7 @@ local function disableOnUpdateHandler(orderListBoxObject)
 end
 
 local function abortDragging(orderListBoxObject)
-    disableOnUpdateHandler(orderListBoxObject)
+    disableOnUpdateHandlerAndResetMouseCursor(orderListBoxObject)
     clearDragging(orderListBoxObject)
 end
 
@@ -224,6 +226,7 @@ local function checkIfDraggedAndDisableUpdateHandler(lamPanel)
     local orderListBoxObject = cursorTLC.orderListBox
     if orderListBoxObject == nil or orderListBoxObject.draggingEntryId == nil then return end
     abortDragging(orderListBoxObject)
+    wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
 end
 
 
@@ -710,11 +713,15 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBo
     local wasMovedToLastEntry = newIndex == maxEntries
     local wasMovedToFirstEntry = newIndex == 1
 
+--d(">wasMovedToLastEntry: " ..tostring(wasMovedToLastEntry) .. ", wasMovedToFirstEntry: " ..tostring(wasMovedToFirstEntry) .. ", moveUp: " ..tostring(moveUp))
+
     zo_callLater(function()
+        local scrollBar = scrollListControl.scrollbar
         if moveUp == nil then
             --Select the dragged & dropped entry now
             if wasMovedToLastEntry then
-                ZO_ScrollList_ScrollAbsolute(scrollListControl, 100)
+                local valueMax = scrollBar.valueMax
+                ZO_ScrollList_ScrollAbsolute(scrollListControl, valueMax)
                 ZO_ScrollList_SelectData(scrollListControl, scrollListControl.data[newIndex].data, nil, nil, true)
             elseif wasMovedToFirstEntry then
                 ZO_ScrollList_ResetToTop(scrollListControl)
@@ -724,7 +731,8 @@ function OrderListBox:MoveItem(selectedIndex, moveUp, moveToIndex, moveToTopOrBo
             end
         else
             if wasMovedToLastEntry then
-                ZO_ScrollList_ScrollAbsolute(scrollListControl, 100)
+                local valueMax = scrollBar.valueMax
+                ZO_ScrollList_ScrollAbsolute(scrollListControl, valueMax)
                 ZO_ScrollList_SelectData(scrollListControl, scrollListControl.data[newIndex].data, nil, nil, true)
             elseif wasMovedToFirstEntry then
                 ZO_ScrollList_ResetToTop(scrollListControl)
@@ -802,8 +810,16 @@ local function autoScroll(orderListBoxVar)
     ZO_ScrollList_ScrollRelative(scrollListControl, scrollValue, nil, true)
 end
 
+function OrderListBox:OnGlobalMouseDownDuringDrag(eventId, mouseButton, ctrl, alt, shift, command)
+--d("[OrderListBox]OnGlobalMouseDownDuringDrag - draggedIndex: " ..tostring(self.draggingEntryId) .. ", mouseButton: " ..tostring(mouseButton))
+    if self.disabled or self.isDragDisabled then return end
+    if self.draggingEntryId and self.draggingSortListContents then
+        self.mouseButtonPressed = mouseButton
+    end
+end
+
 function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt, shift, command)
---d("[OrderListBox]OnGlobalMouseUpDuringDrag - draggedIndex: " ..tostring(self.draggingEntryId))
+--d("[OrderListBox]OnGlobalMouseUpDuringDrag - draggedIndex: " ..tostring(self.draggingEntryId) .. ", mouseButton: " ..tostring(mouseButton))
     if self.disabled or self.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then
         abortDragging(self)
@@ -855,7 +871,6 @@ function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
 end
 
 function OrderListBox:DragOnUpdateCallback(draggedControl)
-
     if self.disabled or self.isDragDisabled then
         abortDragging(self)
         return
@@ -885,6 +900,7 @@ function OrderListBox:DragOnUpdateCallback(draggedControl)
 end
 
 function OrderListBox:StartDragging(draggedControl, mouseButton)
+--d("StartDragging")
     local selfVar = self
     if self.disabled or selfVar.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then return end
@@ -892,6 +908,7 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     self.draggingEntryId            = draggedControl.index
     self.draggingSortListContents   = draggedControl:GetParent()
     self.draggingText               = draggedControl.dataEntry.data.text
+    self.mouseButtonPressed         = MOUSE_BUTTON_INDEX_LEFT
 
     --Anchor the TLC with the label of the dragged row element to GuiMouse
     self:UpdateCursorTLC(false, draggedControl)
@@ -901,6 +918,7 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     ZO_ScrollList_SelectData(self.scrollListControl, nil, nil, nil, true)
     --Enable a global MouseUp check and see if the mouse is above the ZO_SortList where the drag started
     --If not: End the drag&drop
+    em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_DOWN", EVENT_GLOBAL_MOUSE_DOWN, function(...) selfVar:OnGlobalMouseDownDuringDrag(...) end)
     em:RegisterForEvent(EVENT_HANDLER_NAMESPACE .. "_GLOBAL_MOUSE_UP", EVENT_GLOBAL_MOUSE_UP, function(...) selfVar:OnGlobalMouseUpDuringDrag(...) end)
 
     --Set the OnUpdate handler to check for the autosroll position of the cursor
@@ -909,19 +927,24 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
 end
 
 
-function OrderListBox:StopDragging(draggedOnToControl, mouseButton)
-    if self.disabled or self.isDragDisabled then return end
-    disableOnUpdateHandler(self)
-    wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
-    if mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId and self.draggingSortListContents then
-        --local totalDeltaX = GetUIMousePosition() - self.draggingXStart
-        --local lastFrameDeltaX = GetUIMouseDeltas() * 15
-        --self:SetSelectedIndex(zo_round((self:CalculateSelectedIndexOffset() + totalDeltaX + lastFrameDeltaX) / self.controlEntryWidth))
---d("[OrderListBox]StopDragging -- from index: " ..tostring(self.draggingEntryId) .." to index: " ..tostring(draggedOnToControl.index))
-        --Remove the entry at index self.draggingEntryId and insert it at draggedOnToControl.dataEntry.data.index
-        self:MoveItem(self.draggingEntryId, nil, draggedOnToControl.index, nil)
-    end
-    clearDragging(self)
+function OrderListBox:StopDragging(draggedOnToControl)
+    --Delay so the OnMouseButtonDown/Up handlers fire first
+    zo_callLater(function()
+        local mouseButton = self.mouseButtonPressed
+    --d("StopDragging - mouseButton: " ..tostring(mouseButton))
+        if self.disabled or self.isDragDisabled then return end
+        disableOnUpdateHandlerAndResetMouseCursor(self)
+        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        if mouseButton and mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId ~= nil and self.draggingSortListContents ~= nil then
+            --local totalDeltaX = GetUIMousePosition() - self.draggingXStart
+            --local lastFrameDeltaX = GetUIMouseDeltas() * 15
+            --self:SetSelectedIndex(zo_round((self:CalculateSelectedIndexOffset() + totalDeltaX + lastFrameDeltaX) / self.controlEntryWidth))
+    --d("[OrderListBox]StopDragging -- from index: " ..tostring(self.draggingEntryId) .." to index: " ..tostring(draggedOnToControl.index))
+            --Remove the entry at index self.draggingEntryId and insert it at draggedOnToControl.dataEntry.data.index
+            self:MoveItem(self.draggingEntryId, nil, draggedOnToControl.index, nil)
+        end
+        clearDragging(self)
+    end, 50)
 end
 
 
