@@ -11,9 +11,6 @@
         [2] = {...},
         ...
     },
-    disableDrag = false, -- or function returning a boolean (optional). Disable the drag&drop of the rows
-    disableButtons = false, -- or function returning a boolean (optional). Disable the move up/move down/move to top/move to bottom buttons
-    showPosition = false, -- or function returning a boolean (optional). Show the position number in front of the list entry
     getFunc = function() return db.currentSortedListEntries end,
     setFunc = function(currentSortedListEntries) db.currentSortedListEntries = currentSortedListEntries doStuff() end,
     tooltip = "OrderListBox's tooltip text.", -- or string id or function returning a string (optional)
@@ -30,6 +27,11 @@
     rowHideCallback = function doStuffOnHide(rowControl, currentRowData) end, --An optional callback function when a row of the listEntries got hidden (optional)
     dataTypeSelectSound = SOUNDS["NONE"], --or function returning a String of a sound from the global SOUNDS table. Will be played as any row containing the datatype (1) of the orderListBox will be selected (optional)
     dataTypeResetControlCallback = function doStuffOnReset(control) end, --An optional callback function when the datatype control gets reset. (optional)
+    disableDrag = false, -- or function returning a boolean (optional). Disable the drag&drop of the rows
+    disableButtons = false, -- or function returning a boolean (optional). Disable the move up/move down/move to top/move to bottom buttons
+    showPosition = false, -- or function returning a boolean (optional). Show the position number in front of the list entry
+    showValue = false, -- or function returning a boolean (optional). Show the value of the entry after the list entry text, surrounded by []
+    showValueAtTooltip = false, -- or function returning a boolean (optional). Show the value of the entry after the tooltip text, surrounded by []
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
     warning = "May cause permanent awesomeness.", -- or string id or function returning a string (optional)
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
@@ -82,6 +84,10 @@ local translations = {
         TOTAL_DOWN      = moveText .. " ко дну",
     },
 }
+local errorTexts = {
+    ["no_line_text_given"] = "Error: No text given for this line"
+}
+
 local lang = string.lower(GetCVar("Language.2"))
 local translation = (translations[lang] ~= nil and translations[lang]) or translations["en"]
 
@@ -99,6 +105,14 @@ local SORT_LIST_ROW_SELECTION_TEMPLATE_NAME = "ZO_ThinListHighlight"
 
 local MIN_HEIGHT                            = SORT_LIST_ROW_DEFAULT_HEIGHT * 5
 
+local mouseCursorHand       = MOUSE_CURSOR_UI_HAND
+local mouseCursorDoNotCare  = MOUSE_CURSOR_DO_NOT_CARE
+local mouseCursorResizeNS   = MOUSE_CURSOR_RESIZE_NS
+
+local scrollboxUpTexture        = "/esoui/art/buttons/scrollbox_uparrow_%s.dds"
+local scrollboxDownTexture      = "/esoui/art/buttons/scrollbox_downarrow_%s.dds"
+local scrollbarEndArrowTexture  = "/esoui/art/chatwindow/chat_scrollbar_endarrow_%s.dds"
+
 local cursorTLC
 local cursorTLCLabel
 
@@ -106,6 +120,10 @@ local cursorTLCLabel
 --Local helper functions
 ------------------------------------------------------------------------------------------------------------------------
 --Functions of the cursor UI related TLC
+local function setMouseCursor(cursorName)
+    wm:SetMouseCursor(cursorName)
+end
+
 local function getCursorTLC()
     cursorTLC = wm:GetControlByName("LAM2_orderlistbox_widget_cursor_TLC", nil)
     if not cursorTLC then return end
@@ -131,6 +149,12 @@ local function getRowInfoFromOrderListBoxData(orderListBoxData)
     local rowHideCallback = (orderListBoxData.rowHideCallback and LAMgetDefaultValue(orderListBoxData.rowHideCallback)) or nil
     local dataTypeResetControlCallback = (orderListBoxData.dataTypeResetControlCallback and LAMgetDefaultValue(orderListBoxData.dataTypeResetControlCallback)) or nil
     return rowHeight, rowTemplate, rowFont, rowMaxLineCount, rowSelectionTemplate, rowSelectedCallback, rowHideCallback, dataTypeSelectSound, dataTypeResetControlCallback
+end
+
+local function getShowValueInfoFromListBoxData(orderListBoxData)
+    local showValue = (orderListBoxData.showValue ~= nil and LAMgetDefaultValue(orderListBoxData.showValue)) or false
+    local showValueAtTooltip = (orderListBoxData.showValueAtTooltip ~= nil and LAMgetDefaultValue(orderListBoxData.showValueAtTooltip)) or false
+    return showValue, showValueAtTooltip
 end
 
 local function getDisabledInfoFromListBoxData(orderListBoxData)
@@ -226,7 +250,7 @@ local function checkIfDraggedAndDisableUpdateHandler(lamPanel)
     local orderListBoxObject = cursorTLC.orderListBox
     if orderListBoxObject == nil or orderListBoxObject.draggingEntryId == nil then return end
     abortDragging(orderListBoxObject)
-    wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+    setMouseCursor(mouseCursorDoNotCare)
 end
 
 
@@ -289,6 +313,8 @@ function OrderListBox:Initialize(panel, control, orderListBoxData)
     self.areButtonsDisabled = false
     self.isDragDisabled = false
     self.showPosition = false
+    self.showValue = false
+    self.showValueAtTooltip = false
     self.rowHeight = SORT_LIST_ROW_DEFAULT_HEIGHT
     self.rowTemplate = SORT_LIST_ROW_TEMPLATE_NAME
     self.rowFont = SORT_LIST_ROW_DEFAULT_FONT
@@ -342,11 +368,11 @@ function OrderListBox:Create(control, orderListBoxData)
 
     local buttonMoveUpControl = wm:CreateControl(controlName .. "_ButtonMoveUp", scrollListControl, CT_BUTTON)
     buttonMoveUpControl:SetDimensions(16, 16)
-    buttonMoveUpControl:SetNormalTexture("/esoui/art/buttons/scrollbox_uparrow_up.dds")
-    buttonMoveUpControl:SetMouseOverTexture("/esoui/art/buttons/scrollbox_uparrow_over.dds")
-    buttonMoveUpControl:SetPressedMouseOverTexture("/esoui/art/buttons/scrollbox_uparrow_down.dds")
-    buttonMoveUpControl:SetPressedTexture("/esoui/art/buttons/scrollbox_uparrow_down.dds")
-    buttonMoveUpControl:SetDisabledTexture("/esoui/art/buttons/scrollbox_uparrow_up_disabled.dds")
+    buttonMoveUpControl:SetNormalTexture(string.format(scrollboxUpTexture, "up"))
+    buttonMoveUpControl:SetMouseOverTexture(string.format(scrollboxUpTexture, "over"))
+    buttonMoveUpControl:SetPressedMouseOverTexture(string.format(scrollboxUpTexture, "down"))
+    buttonMoveUpControl:SetPressedTexture(string.format(scrollboxUpTexture, "down"))
+    buttonMoveUpControl:SetDisabledTexture(string.format(scrollboxUpTexture, "up_disabled"))
     buttonMoveUpControl:SetPressedOffset(2, 2)
     buttonMoveUpControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, -16)
     buttonMoveUpControl:SetHidden(true)
@@ -355,12 +381,12 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        setMouseCursor(mouseCursorHand)
     end)
     buttonMoveUpControl:SetHandler("OnMouseExit", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseExit(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+        setMouseCursor(mouseCursorDoNotCare)
     end)
     buttonMoveUpControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
         if selfVar.disabled then return end
@@ -370,11 +396,11 @@ function OrderListBox:Create(control, orderListBoxData)
 
     local buttonMoveDownControl = wm:CreateControl(controlName .. "_ButtonMoveDown", scrollListControl, CT_BUTTON)
     buttonMoveDownControl:SetDimensions(16, 16)
-    buttonMoveDownControl:SetNormalTexture("/esoui/art/buttons/scrollbox_downarrow_up.dds")
-    buttonMoveDownControl:SetMouseOverTexture("/esoui/art/buttons/scrollbox_downarrow_over.dds")
-    buttonMoveDownControl:SetPressedMouseOverTexture("/esoui/art/buttons/scrollbox_downarrow_down.dds")
-    buttonMoveDownControl:SetPressedTexture("/esoui/art/buttons/scrollbox_downarrow_down.dds")
-    buttonMoveDownControl:SetDisabledTexture("/esoui/art/buttons/scrollbox_downarrow_up_disabled.dds")
+    buttonMoveDownControl:SetNormalTexture(string.format(scrollboxDownTexture, "up"))
+    buttonMoveDownControl:SetMouseOverTexture(string.format(scrollboxDownTexture, "over"))
+    buttonMoveDownControl:SetPressedMouseOverTexture(string.format(scrollboxDownTexture, "down"))
+    buttonMoveDownControl:SetPressedTexture(string.format(scrollboxDownTexture, "down"))
+    buttonMoveDownControl:SetDisabledTexture(string.format(scrollboxDownTexture, "up_disabled"))
     buttonMoveDownControl:SetPressedOffset(2, 2)
     buttonMoveDownControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, 12)
     buttonMoveDownControl:SetHidden(true)
@@ -383,12 +409,12 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        setMouseCursor(mouseCursorHand)
     end)
     buttonMoveDownControl:SetHandler("OnMouseExit", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseExit(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+        setMouseCursor(mouseCursorDoNotCare)
     end)
     buttonMoveDownControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
         if selfVar.disabled then return end
@@ -398,11 +424,11 @@ function OrderListBox:Create(control, orderListBoxData)
 
     local buttonMoveTotalUpControl = wm:CreateControl(controlName .. "_ButtonMoveTotalUp", scrollListControl, CT_BUTTON)
     buttonMoveTotalUpControl:SetDimensions(16, 16)
-    buttonMoveTotalUpControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
-    buttonMoveTotalUpControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
-    buttonMoveTotalUpControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
-    buttonMoveTotalUpControl:SetPressedTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
-    buttonMoveTotalUpControl:SetDisabledTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_disabled.dds")
+    buttonMoveTotalUpControl:SetNormalTexture(string.format(scrollbarEndArrowTexture, "up"))
+    buttonMoveTotalUpControl:SetMouseOverTexture(string.format(scrollbarEndArrowTexture, "over"))
+    buttonMoveTotalUpControl:SetPressedMouseOverTexture(string.format(scrollbarEndArrowTexture, "down"))
+    buttonMoveTotalUpControl:SetPressedTexture(string.format(scrollbarEndArrowTexture, "down"))
+    buttonMoveTotalUpControl:SetDisabledTexture(string.format(scrollbarEndArrowTexture, "disabled"))
     buttonMoveTotalUpControl:SetPressedOffset(2, 2)
     buttonMoveTotalUpControl:SetTextureCoords(1, 0, 1, 0) -- rotate by 180° so the texture points up
     buttonMoveTotalUpControl:SetAnchor(BOTTOM, buttonMoveUpControl, TOP, 0, -4)
@@ -412,12 +438,12 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        setMouseCursor(mouseCursorHand)
     end)
     buttonMoveTotalUpControl:SetHandler("OnMouseExit", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseExit(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+        setMouseCursor(mouseCursorDoNotCare)
     end)
     buttonMoveTotalUpControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
         if selfVar.disabled then return end
@@ -427,11 +453,11 @@ function OrderListBox:Create(control, orderListBoxData)
 
     local buttonMoveTotalDownControl = wm:CreateControl(controlName .. "_ButtonMoveTotalDown", scrollListControl, CT_BUTTON)
     buttonMoveTotalDownControl:SetDimensions(16, 16)
-    buttonMoveTotalDownControl:SetNormalTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_up.dds")
-    buttonMoveTotalDownControl:SetMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_over.dds")
-    buttonMoveTotalDownControl:SetPressedMouseOverTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
-    buttonMoveTotalDownControl:SetPressedTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_down.dds")
-    buttonMoveTotalDownControl:SetDisabledTexture("/esoui/art/chatwindow/chat_scrollbar_endarrow_disabled.dds")
+    buttonMoveTotalDownControl:SetNormalTexture(string.format(scrollbarEndArrowTexture, "up"))
+    buttonMoveTotalDownControl:SetMouseOverTexture(string.format(scrollbarEndArrowTexture, "over"))
+    buttonMoveTotalDownControl:SetPressedMouseOverTexture(string.format(scrollbarEndArrowTexture, "down"))
+    buttonMoveTotalDownControl:SetPressedTexture(string.format(scrollbarEndArrowTexture, "down"))
+    buttonMoveTotalDownControl:SetDisabledTexture(string.format(scrollbarEndArrowTexture, "disabled"))
     buttonMoveTotalDownControl:SetPressedOffset(2, 2)
     buttonMoveTotalDownControl:SetAnchor(TOP, buttonMoveDownControl, BOTTOM, 0, 4)
     buttonMoveTotalDownControl:SetHidden(true)
@@ -440,12 +466,12 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        setMouseCursor(mouseCursorHand)
     end)
     buttonMoveTotalDownControl:SetHandler("OnMouseExit", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseExit(button)
-        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+        setMouseCursor(mouseCursorDoNotCare)
     end)
     buttonMoveTotalDownControl:SetHandler("OnClicked", function(buttonCtrl, button, ctrl, alt, shift, command)
         if selfVar.disabled then return end
@@ -485,6 +511,8 @@ function OrderListBox:Create(control, orderListBoxData)
 
     local rowHideCallback = self.rowHideCallback
     local resetControlCallback = self.dataTypeResetControlCallback
+
+    self.showValue, self.showValueAtTooltip = getShowValueInfoFromListBoxData(orderListBoxData)
 
     local setupFunction = function(control, data, scrollList)
         selfVar:RowSetupFunction(control, data, scrollList)
@@ -586,11 +614,16 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
     -- What is contained in data is determined by the structure of the table of data items you used in the Populate function
     rowControl:SetFont(self.rowFont)
     rowControl:SetMaxLineCount(self.rowMaxLineCount) -- 1 = Forces the text to only use one row
+
+    --The row's text
+    local rowText = (data.text ~= nil and data.text) or errorTexts["no_line_text_given"]
     if self.showPosition then
-        rowControl:SetText(tostring(rowControl.index) .. ") " .. data.text)
-    else
-        rowControl:SetText(data.text)
+        rowText = tostring(rowControl.index) .. ") " .. rowText
     end
+    if self.showValue then
+        rowText = rowText .. " [" .. tostring(data.value) .. "]"
+    end
+    rowControl:SetText(rowText)
 
     -- When we added the data type earlier we also enabled being able to select an item and which function to run
     -- when an row is slected.  We still need to set up a handler to actuall register the mouse click which
@@ -601,7 +634,7 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
         if self.disabled then return end
         self.mouseDown = nil
         if not upInside or mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then return end
-        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        setMouseCursor(mouseCursorHand)
         if self.draggingEntryId ~= nil then return end
         ZO_ScrollList_MouseClick(scrollList, p_rowControl)
     end)
@@ -612,22 +645,27 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
         if self.draggingEntryId == nil then
             --Is the left mouse pressed down (before dragging)
             if mouseButton == MOUSE_BUTTON_INDEX_LEFT and not self.isDragDisabled then
-                wm:SetMouseCursor(MOUSE_CURSOR_RESIZE_NS)
+                setMouseCursor(mouseCursorResizeNS)
             else
-                wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+                setMouseCursor(mouseCursorHand)
             end
         else
-            wm:SetMouseCursor(MOUSE_CURSOR_RESIZE_NS)
+            setMouseCursor(mouseCursorResizeNS)
         end
     end)
 
+    --The tooltip
     local tooltip = data.tooltip
+    if self.showValueAtTooltip then
+        tooltip = tooltip .. " [" .. tostring(data.value) .."]"
+    end
+
     rowControl:SetHandler("OnMouseEnter", function(p_rowControl)
 --d(">OnMouseEnter, draggingEntryId: " .. tostring(self.draggingEntryId))
         if self.disabled then return end
         local isMouseDown = self.mouseDown
         if self.draggingEntryId == nil and not isMouseDown then
-            wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+            setMouseCursor(mouseCursorHand)
         end
         if not isMouseDown then
             ZO_Tooltips_ShowTextTooltip(p_rowControl, LEFT, tooltip)
@@ -637,7 +675,7 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
 --d(">OnMouseExit, draggingEntryId: " .. tostring(self.draggingEntryId))
         if self.disabled then return end
         if self.draggingEntryId == nil and not self.mouseDown then
-            wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+            setMouseCursor(mouseCursorDoNotCare)
         end
         ZO_Tooltips_HideTextTooltip()
     end )
@@ -824,13 +862,13 @@ function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt,
     if self.disabled or self.isDragDisabled then return end
     if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT then
         abortDragging(self)
-        wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+        setMouseCursor(mouseCursorDoNotCare)
     end
     if self.draggingEntryId and self.draggingSortListContents then
         local controlBelowMouse = moc()
         if not controlBelowMouse or controlBelowMouse and controlBelowMouse:GetParent() ~= self.draggingSortListContents then
             abortDragging(self)
-            wm:SetMouseCursor(MOUSE_CURSOR_DO_NOT_CARE)
+            setMouseCursor(mouseCursorDoNotCare)
         end
     end
 end
@@ -914,7 +952,7 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     --Anchor the TLC with the label of the dragged row element to GuiMouse
     self:UpdateCursorTLC(false, draggedControl)
 
-    wm:SetMouseCursor(MOUSE_CURSOR_RESIZE_NS)
+    setMouseCursor(mouseCursorResizeNS)
     --Unselect any selected entry
     ZO_ScrollList_SelectData(self.scrollListControl, nil, nil, nil, true)
     --Enable a global MouseUp check and see if the mouse is above the ZO_SortList where the drag started
@@ -935,7 +973,7 @@ function OrderListBox:StopDragging(draggedOnToControl)
     --d("StopDragging - mouseButton: " ..tostring(mouseButton))
         if self.disabled or self.isDragDisabled then return end
         disableOnUpdateHandlerAndResetMouseCursor(self)
-        wm:SetMouseCursor(MOUSE_CURSOR_UI_HAND)
+        setMouseCursor(mouseCursorHand)
         if mouseButton and mouseButton == MOUSE_BUTTON_INDEX_LEFT and self.draggingEntryId ~= nil and self.draggingSortListContents ~= nil then
             --local totalDeltaX = GetUIMousePosition() - self.draggingXStart
             --local lastFrameDeltaX = GetUIMouseDeltas() * 15
