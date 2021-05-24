@@ -129,32 +129,38 @@ local cursorTLCLabel
 --Local helper functions
 ------------------------------------------------------------------------------------------------------------------------
 --Error handling
-local function errorOutput(errorTextName, values)
+local function errorOutput(errorTextName, values, buildText)
+    buildText = buildText or false
     local errorOutputText = errorTexts[errorTextName]
     if errorOutputText and errorOutputText ~= "" then
         if values ~= nil then
             errorOutputText = string.format(errorOutputText, unpack(values))
         end
-        d("["..widgetPrefix .. "] ERROR - " .. errorOutputText)
+        errorOutputText = "["..widgetPrefix .. "] ERROR - " .. errorOutputText
+        if buildText then
+            return errorOutputText
+        else
+            d(errorOutputText)
+        end
     end
 end
 
+local function buildErrorOutput(errorTextName, values)
+    return errorOutput(errorTextName, values, true)
+end
+
+
 local function checkOrderListBoxEntriesForCorrectFormat(listEntries)
-    assert(listEntries ~= nil, errorOutput("no_list_entries", nil))
+    assert(listEntries ~= nil, buildErrorOutput("no_list_entries", nil))
     for idx, listEntry in ipairs(listEntries) do
-        assert(type(listEntry) == "table", errorOutput("list_entry_no_table", {idx}))
+        assert(type(listEntry) == "table", buildErrorOutput("list_entry_no_table", {idx}))
         local uniqueKey = listEntry.uniqueKey
-        assert(uniqueKey ~= nil, errorOutput("list_entry_field_missing", {idx, "uniqueKey"}))
-        assert(type(uniqueKey) == "number", errorOutput("list_entry_field_format_wrong", {idx, "uniqueKey", tostring(uniqueKey), "number"}))
+        assert(uniqueKey ~= nil, buildErrorOutput("list_entry_field_missing", {idx, "uniqueKey"}))
+        assert(type(uniqueKey) == "number", buildErrorOutput("list_entry_field_format_wrong", {idx, "uniqueKey", tostring(uniqueKey), "number"}))
         local value = listEntry.value
-        assert(value ~= nil, errorOutput("list_entry_field_missing", {idx, "value"}))
-        local text = listEntry.text
-        assert(text ~= nil, errorOutput("list_entry_field_missing", {idx, "text"}))
-        assert(type(text) == "String", errorOutput("list_entry_field_format_wrong", {idx, "text", tostring(text), "String"}))
-        local tooltip = listEntry.tooltip
-        if tooltip ~= nil then
-            assert(type(tooltip) == "String", errorOutput("list_entry_field_format_wrong", {idx, "tooltip", tostring(tooltip), "String"}))
-        end
+        assert(value ~= nil, buildErrorOutput("list_entry_field_missing", {idx, "value"}))
+        local textVar = listEntry.text
+        assert(textVar ~= nil, buildErrorOutput("list_entry_field_missing", {idx, "text"}))
     end
 end
 
