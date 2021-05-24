@@ -19,7 +19,7 @@
     minHeight = function() return db.minHeightNumber end, --or number for the minimum height of this control. Default: 125 (optional)
     maxHeight = function() return db.maxHeightNumber end, --or number for the maximum height of this control. Default: value of minHeight (optional)
     rowHeight = function() return db.rowHeightNumber end, --or number for the height of the row of the entries in listEntries. Default: 25 (optional)
-    rowTemplate = "LAM2_orderlistbox_widget_scrolllist_row", --String defining the XML virtual template control for a row of the listEntries (optional)
+    rowTemplate = "LAM2_OrderListBox_Widget_Scrolllist_Row", --String defining the XML virtual template control for a row of the listEntries (optional)
     rowFont = "ZoFontWinH4", --or function returning a String of the font to use for the row (optional),
     rowMaxLineCount = 1, --or function returning a number of the maximum text lines within the row. 1 = Only 1 text line, no wrapping, get#s truncated. (optional)
     rowSelectionTemplate = "ZO_ThinListHighlight", --String defining the XML virtual template control for the selection at a row of the listEntries (optional)
@@ -86,6 +86,8 @@ local translations = {
 }
 --Widget constants
 local widgetPrefix = "LAM2_OrderListBox_Widget"
+local widgetCursorTLCName = widgetPrefix .. "_Cursor_TLC"
+
 --Error constants
 local errorTexts = {
     ["no_line_text_given"]              = "No text given for this line",
@@ -170,8 +172,7 @@ local function setMouseCursor(cursorName)
 end
 
 local function getCursorTLC()
-    cursorTLC = wm:GetControlByName("LAM2_orderlistbox_widget_cursor_TLC", nil)
-    if not cursorTLC then return end
+    cursorTLC = wm:GetControlByName(widgetCursorTLCName, nil)
     cursorTLCLabel = GetControl(cursorTLC, "Label")
     cursorTLC:ClearAnchors()
     cursorTLC:SetDimensions(0, 0)
