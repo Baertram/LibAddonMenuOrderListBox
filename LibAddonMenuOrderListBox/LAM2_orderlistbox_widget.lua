@@ -40,7 +40,7 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 6
+local widgetVersion = 8
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -53,23 +53,23 @@ local LAMgetDefaultValue = util.GetDefaultValue
 local moveText = GetString(SI_HOUSINGEDITORCOMMANDTYPE1)
 local moveTextLower = string.lower(moveText)
 local translations = {
-    ["en"] = {
-        UP              = moveText .. " up",
-        DOWN            = moveText .. " down",
-        TOTAL_UP        = moveText .. " to top",
-        TOTAL_DOWN      = moveText .. " to bottom",
-    },
     ["de"] = {
         UP              = "Hoch " .. moveTextLower,
         DOWN            = "Herrunter " .. moveTextLower,
         TOTAL_UP        = "Zum Anfang " .. moveTextLower,
         TOTAL_DOWN      = "Zum Ende " .. moveTextLower,
     },
-    ["jp"] = {
-        UP              = moveText .. " 上",
-        DOWN            = moveText .. " 下へ",
-        TOTAL_UP        = moveText .. " 頂点に",
-        TOTAL_DOWN      = moveText .. " 一番下に",
+    ["en"] = {
+        UP              = moveText .. " up",
+        DOWN            = moveText .. " down",
+        TOTAL_UP        = moveText .. " to top",
+        TOTAL_DOWN      = moveText .. " to bottom",
+    },
+    ["es"] = {
+        UP              = "Mover hacia arriba",
+        DOWN            = "Mover hacia abajo",
+        TOTAL_UP        = "Mover todo hacia arriba",
+        TOTAL_DOWN      = "Mover todo hacia abajo",
     },
     ["fr"] = {
         UP              = moveText .. " en haut",
@@ -77,11 +77,23 @@ local translations = {
         TOTAL_UP        = moveText .. " jusqu'au sommet",
         TOTAL_DOWN      = moveText .. " vers le bas",
     },
+    ["jp"] = {
+        UP              = moveText .. " 上",
+        DOWN            = moveText .. " 下へ",
+        TOTAL_UP        = moveText .. " 頂点に",
+        TOTAL_DOWN      = moveText .. " 一番下に",
+    },
     ["ru"] = {
         UP              = moveText .. " вверх",
         DOWN            = moveText .. " вниз",
         TOTAL_UP        = moveText .. " наверх",
         TOTAL_DOWN      = moveText .. " ко дну",
+    },
+    ["zh"] = {
+        UP              = "提升",
+        DOWN            = "向下移动",
+        TOTAL_UP        = "全部向上移动",
+        TOTAL_DOWN      = "全部向下移动",
     },
 }
 --Widget constants
