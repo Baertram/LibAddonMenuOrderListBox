@@ -677,7 +677,7 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
     rowControl:SetMaxLineCount(self.rowMaxLineCount) -- 1 = Forces the text to only use one row
 
     --The row's text
-    local rowText = (data.text ~= nil and data.text) or errorTexts["no_line_text_given"]
+    local rowText = (data.text ~= nil and util.GetStringFromValue(data.text)) or errorTexts["no_line_text_given"]
     if self.showPosition then
         rowText = tostring(rowControl.index) .. ") " .. rowText
     end
