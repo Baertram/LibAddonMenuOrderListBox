@@ -1007,7 +1007,7 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     --d("[OrderListBox]StartDragging - index: " ..tostring(draggedControl.index))
     self.draggingEntryId            = draggedControl.index
     self.draggingSortListContents   = draggedControl:GetParent()
-    self.draggingText               = draggedControl.dataEntry.data.text
+    self.draggingText               = util.GetStringFromValue(draggedControl.dataEntry.data.text)
     self.mouseButtonPressed         = MOUSE_BUTTON_INDEX_LEFT
 
     --Anchor the TLC with the label of the dragged row element to GuiMouse
