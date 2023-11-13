@@ -40,14 +40,18 @@
     reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 8
+local widgetVersion = 10
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
 local wm = WINDOW_MANAGER
 local cm = CALLBACK_MANAGER
 
+local LAMgetStringFromValue = util.GetStringFromValue
 local LAMgetDefaultValue = util.GetDefaultValue
+
+local orderListBoxNameTemplate = "LAMOrderListBox_%s"
+local orderListBoxCounter = 0
 
 --Translations
 local moveText = GetString(SI_HOUSINGEDITORCOMMANDTYPE1)
@@ -199,6 +203,7 @@ end
 local function getRowInfoFromOrderListBoxData(orderListBoxData)
     local rowHeight = (orderListBoxData.rowHeight and LAMgetDefaultValue(orderListBoxData.rowHeight)) or SORT_LIST_ROW_DEFAULT_HEIGHT
     local rowTemplate = (orderListBoxData.rowTemplate and LAMgetDefaultValue(orderListBoxData.rowTemplate)) or SORT_LIST_ROW_TEMPLATE_NAME
+--d("[LAMOrderListBox]rowTemplate: " ..tostring(rowTemplate))
     local rowFont = (orderListBoxData.rowFont and LAMgetDefaultValue(orderListBoxData.rowFont)) or SORT_LIST_ROW_DEFAULT_FONT
     local rowMaxLineCount = (orderListBoxData.rowMaxLineCount and LAMgetDefaultValue(orderListBoxData.rowMaxLineCount)) or SORT_LIST_ROW_DEFAULT_MAXLINES
     local rowSelectionTemplate = (orderListBoxData.rowSelectionTemplate and LAMgetDefaultValue(orderListBoxData.rowSelectionTemplate)) or SORT_LIST_ROW_SELECTION_TEMPLATE_NAME
@@ -435,7 +440,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveUpControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, -16)
     buttonMoveUpControl:SetHidden(true)
     buttonMoveUpControl:SetClickSound("Click")
-    buttonMoveUpControl.data = {tooltipText = util.GetStringFromValue(translations[lang].UP)}
+    buttonMoveUpControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].UP)}
     buttonMoveUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -463,7 +468,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, 12)
     buttonMoveDownControl:SetHidden(true)
     buttonMoveDownControl:SetClickSound("Click")
-    buttonMoveDownControl.data = {tooltipText = util.GetStringFromValue(translations[lang].DOWN)}
+    buttonMoveDownControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].DOWN)}
     buttonMoveDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -492,7 +497,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalUpControl:SetAnchor(BOTTOM, buttonMoveUpControl, TOP, 0, -4)
     buttonMoveTotalUpControl:SetHidden(true)
     buttonMoveTotalUpControl:SetClickSound("Click")
-    buttonMoveTotalUpControl.data = {tooltipText = util.GetStringFromValue(translations[lang].TOTAL_UP)}
+    buttonMoveTotalUpControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].TOTAL_UP)}
     buttonMoveTotalUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -520,7 +525,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalDownControl:SetAnchor(TOP, buttonMoveDownControl, BOTTOM, 0, 4)
     buttonMoveTotalDownControl:SetHidden(true)
     buttonMoveTotalDownControl:SetClickSound("Click")
-    buttonMoveTotalDownControl.data = {tooltipText = util.GetStringFromValue(translations[lang].TOTAL_DOWN)}
+    buttonMoveTotalDownControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].TOTAL_DOWN)}
     buttonMoveTotalDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -583,7 +588,7 @@ function OrderListBox:Create(control, orderListBoxData)
             selfVar.rowSelectedCallback(selfVar, previouslySelectedData, selectedData, reselectingDuringRebuild)
         end
     end
-
+--d(">templateName: " ..tostring(templateName))
     ZO_ScrollList_AddDataType(scrollListControl, dataTypeId, templateName, rowHeight, setupFunction, rowHideCallback, dataTypeSelectSound, resetControlCallback)
     ZO_ScrollList_EnableSelection(scrollListControl, selectTemplate, selectCallback)
 
@@ -677,7 +682,7 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
     rowControl:SetMaxLineCount(self.rowMaxLineCount) -- 1 = Forces the text to only use one row
 
     --The row's text
-    local rowText = (data.text ~= nil and util.GetStringFromValue(data.text)) or errorTexts["no_line_text_given"]
+    local rowText = (data.text ~= nil and LAMgetStringFromValue(data.text)) or errorTexts["no_line_text_given"]
     if self.showPosition then
         rowText = tostring(rowControl.index) .. ") " .. rowText
     end
@@ -1007,7 +1012,7 @@ function OrderListBox:StartDragging(draggedControl, mouseButton)
     --d("[OrderListBox]StartDragging - index: " ..tostring(draggedControl.index))
     self.draggingEntryId            = draggedControl.index
     self.draggingSortListContents   = draggedControl:GetParent()
-    self.draggingText               = util.GetStringFromValue(draggedControl.dataEntry.data.text)
+    self.draggingText               = LAMgetStringFromValue(draggedControl.dataEntry.data.text)
     self.mouseButtonPressed         = MOUSE_BUTTON_INDEX_LEFT
 
     --Anchor the TLC with the label of the dragged row element to GuiMouse
@@ -1064,6 +1069,9 @@ end
 --The orderlistbox widget
 ------------------------------------------------------------------------------------------------------------------------
 function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
+    orderListBoxCounter = orderListBoxCounter + 1
+    --GitHub issue #2 controlName ("reference") is not always provided so duplicate names could occur -> Prevent those
+    controlName = controlName or string.format(orderListBoxNameTemplate, tostring(orderListBoxCounter))
     local control = util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
     control.isBuilding = true
 
@@ -1104,7 +1112,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         control:UpdateWarning()
     end
 
-    control.data.tooltipText = util.GetStringFromValue(orderListBoxData.tooltip)
+    control.data.tooltipText = LAMgetStringFromValue(orderListBoxData.tooltip)
 
     control.UpdateValue = UpdateValue
     control:UpdateValue()
