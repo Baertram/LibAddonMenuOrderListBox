@@ -1,7 +1,7 @@
 ## APIVersion: 101040 101041
 ## Title: LibAddonMenu-2.0 - OrderListBox
-## Version: 10
-## AddOnVersion: 010
+## Version: 9
+## AddOnVersion: 009
 ## IsLibrary: true
 ## DependsOn: LibAddonMenu-2.0>=35
 ## Author: Baertram
