@@ -728,7 +728,7 @@ function OrderListBox:RowSetupFunction(rowControl, data, scrollList)
         if self.draggingEntryId == nil and not isMouseDown then
             setMouseCursor(mouseCursorHand)
         end
-        if not isMouseDown then
+        if not isMouseDown and tooltip then
             ZO_Tooltips_ShowTextTooltip(p_rowControl, LEFT, tooltip)
         end
     end)
