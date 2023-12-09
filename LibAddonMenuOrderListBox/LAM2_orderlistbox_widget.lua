@@ -37,10 +37,10 @@
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
     default = defaults.var, -- default value or function that returns the default value (optional)
     helpUrl = "https://www.esoui.com/portal.php?id=218&a=faq", -- a string URL or a function that returns the string URL (optional)
-    reference = "MyAddonOrderListBox" -- unique global reference to control (optional)
+    reference = "MyAddonOrderListBox" -- function returning String, or String unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 9
+local widgetVersion = 10
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -1070,8 +1070,9 @@ end
 ------------------------------------------------------------------------------------------------------------------------
 function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     orderListBoxCounter = orderListBoxCounter + 1
-    --GitHub issue #2 controlName ("reference") is not always provided so duplicate names could occur -> Prevent those
-    controlName = controlName or string.format(orderListBoxNameTemplate, tostring(orderListBoxCounter))
+    --GitHub issue #2 controlName ("reference") is not always provided so "parent" name could be empty and thus duplicate "scrollList" names could occur
+    --and issue #5 controlName provided will not use reference any longer in LibAddonMenu2.util.CreateBaseControl(parent, controlData, controlName)
+    controlName = controlName or LAMgetDefaultValue(orderListBoxData.reference) or string.format(orderListBoxNameTemplate, tostring(orderListBoxCounter))
     local control = util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
     control.isBuilding = true
 
