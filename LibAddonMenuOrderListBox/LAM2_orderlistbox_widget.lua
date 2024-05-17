@@ -32,6 +32,8 @@
     showPosition = false, -- or function returning a boolean (optional). Show the position number in front of the list entry
     showValue = false, -- or function returning a boolean (optional). Show the value of the entry after the list entry text, surrounded by []
     showValueAtTooltip = false, -- or function returning a boolean (optional). Show the value of the entry after the tooltip text, surrounded by []
+    addEntryDialog = { title="Add new entry", text="Enter new text here", textType=TEXT_TYPE_ALL, buttonTexture="", maxInputCharacters=0, specialCharacters={"a", "b", "c"} }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a dialog. Inside the table you can pass in additional data and options to the ZO_Dialog dialog, e.g. title, text, editbox in dialog only accepts digits -> TEXT_TYPE_NUMERIC_UNSIGNED_INT, and other custom data
+    showRemoveEntryButton = false, -- or function returning a boolean (optional). Show a button to remove the currently selected entry
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
     warning = "May cause permanent awesomeness.", -- or string id or function returning a string (optional)
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
@@ -40,7 +42,7 @@
     reference = "MyAddonOrderListBox" -- function returning String, or String unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 10
+local widgetVersion = 11
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -50,8 +52,11 @@ local cm = CALLBACK_MANAGER
 local LAMgetStringFromValue = util.GetStringFromValue
 local LAMgetDefaultValue = util.GetDefaultValue
 
-local orderListBoxNameTemplate = "LAMOrderListBox_%s"
-local orderListBoxCounter = 0
+local orderListBoxNameTemplate            = "LAMOrderListBox_%s"
+local orderListBoxAddNewValueDialogSuffix = "AddNewValueDialog"
+local orderListBoxAddNewValueButtonSuffix = "AddNewValueButton"
+local orderListBoxRemoveEntryButtonSuffix = "RemoveEntryButton"
+local orderListBoxCounter                 = 0
 
 --Translations
 local moveText = GetString(SI_HOUSINGEDITORCOMMANDTYPE1)
@@ -250,13 +255,9 @@ local function updateButtonsEnabledState(control, areButtonsDisabled, orderListB
     buttonMoveTotalDownControl:SetMouseEnabled(mouseEnabled)
 end
 
-local function updateOrderListBoxEntries(control, value)
-    --d("updateOrderListBoxEntries")
-    local orderListBox = control.orderListBox
-    orderListBox.orderListBoxData.listEntries = value
-    --Update the order list now with new populated masterlist
-    orderListBox.masterList = orderListBox:Populate(orderListBox.orderListBoxData)
-    orderListBox:UpdateScrollList(orderListBox.scrollListControl, orderListBox.masterList, LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE, orderListBox)
+local function updateRemoveEntryEnabledState(control)
+    if control.RemoveEntryButton == nil then return end
+    control.RemoveEntryButton:SetMouseEnabled(ZO_ScrollList_GetSelectedDataIndex(control.orderListBox.scrollListControl) ~= nil)
 end
 
 local function updateDisabledStateOfControls(control, disable)
@@ -276,12 +277,28 @@ local function updateDisabledStateOfControls(control, disable)
     elseif areButtonsDisabled == false then
         areButtonsDisabled = orderListBox.areButtonsDisabled
     end
+    if control.AddNewValueButton ~= nil then
+        control.AddNewValueButton:SetMouseEnabled(enabledState)
+    end
+    updateRemoveEntryEnabledState(control)
+
     updateButtonsEnabledState(control, areButtonsDisabled, orderListBox.orderListBoxData, orderListBox.moveUpButton, orderListBox.moveDownButton, orderListBox.moveTotalUpButton, orderListBox.moveTotalDownButton)
 
     --Disable scrollbar
     ZO_ScrollList_SetUseScrollbar(scrollList, enabledState)
     --Redraw the scrolllist
     ZO_ScrollList_Commit(scrollList)
+end
+
+local function updateOrderListBoxEntries(control, value)
+    --d("updateOrderListBoxEntries")
+    local orderListBox = control.orderListBox
+    orderListBox.orderListBoxData.listEntries = value
+    --Update the order list now with new populated masterlist
+    orderListBox.masterList = orderListBox:Populate(orderListBox.orderListBoxData)
+    orderListBox:UpdateScrollList(orderListBox.scrollListControl, orderListBox.masterList, LAM_SORT_LIST_BOX_SCROLL_LIST_DATATYPE, orderListBox)
+
+    updateRemoveEntryEnabledState(control)
 end
 
 --Drag & drop functions
@@ -363,10 +380,11 @@ end
 
 
 function OrderListBox:Initialize(panel, control, orderListBoxData)
-    local combobox = control.combobox
+    --local combobox = control.combobox
     --local selfVar = self
     self.panel = panel
     self.control = control
+    self.name = control.orderListBoxName
 
     self.orderListBoxData = orderListBoxData
 
@@ -440,7 +458,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveUpControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, -16)
     buttonMoveUpControl:SetHidden(true)
     buttonMoveUpControl:SetClickSound("Click")
-    buttonMoveUpControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].UP)}
+    buttonMoveUpControl.data = {tooltipText = LAMgetStringFromValue(translation.UP)}
     buttonMoveUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -468,7 +486,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveDownControl:SetAnchor(LEFT, scrollListControl, RIGHT, 0, 12)
     buttonMoveDownControl:SetHidden(true)
     buttonMoveDownControl:SetClickSound("Click")
-    buttonMoveDownControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].DOWN)}
+    buttonMoveDownControl.data = {tooltipText = LAMgetStringFromValue(translation.DOWN)}
     buttonMoveDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -497,7 +515,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalUpControl:SetAnchor(BOTTOM, buttonMoveUpControl, TOP, 0, -4)
     buttonMoveTotalUpControl:SetHidden(true)
     buttonMoveTotalUpControl:SetClickSound("Click")
-    buttonMoveTotalUpControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].TOTAL_UP)}
+    buttonMoveTotalUpControl.data = {tooltipText = LAMgetStringFromValue(translation.TOTAL_UP)}
     buttonMoveTotalUpControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -525,7 +543,7 @@ function OrderListBox:Create(control, orderListBoxData)
     buttonMoveTotalDownControl:SetAnchor(TOP, buttonMoveDownControl, BOTTOM, 0, 4)
     buttonMoveTotalDownControl:SetHidden(true)
     buttonMoveTotalDownControl:SetClickSound("Click")
-    buttonMoveTotalDownControl.data = {tooltipText = LAMgetStringFromValue(translations[lang].TOTAL_DOWN)}
+    buttonMoveTotalDownControl.data = {tooltipText = LAMgetStringFromValue(translation.TOTAL_DOWN)}
     buttonMoveTotalDownControl:SetHandler("OnMouseEnter", function(button)
         if selfVar.disabled then return end
         ZO_Options_OnMouseEnter(button)
@@ -763,6 +781,7 @@ function OrderListBox:OnRowSelected(previouslySelectedData, selectedData, resele
         buttonMoveTotalUpControl:SetHidden(true)
         buttonMoveTotalDownControl:SetMouseEnabled(false)
         buttonMoveTotalDownControl:SetHidden(true)
+        updateRemoveEntryEnabledState(self.control)
     else
         local selectedIndex = ZO_ScrollList_GetSelectedDataIndex(self.scrollListControl)
         if not selectedIndex then return end
@@ -862,6 +881,7 @@ end
 function OrderListBox:UpdateMoveButtonsEnabledState(newIndex)
 --d("[LAM2 OrderListBox]UpdateMoveButtonsEnabledState")
     if self.disabled or self.areButtonsDisabled then return end
+    updateRemoveEntryEnabledState(self.control)
     if not newIndex then return end
     self.moveUpButton:SetHidden(false)
     self.moveDownButton:SetHidden(false)
@@ -1052,6 +1072,87 @@ function OrderListBox:StopDragging(draggedOnToControl)
     end, 50)
 end
 
+function OrderListBox:GetCurrentEntries()
+    return self.control.data.getFunc()
+end
+
+function OrderListBox:RemoveValue(index, uniqueKey)
+    if index == nil and uniqueKey == nil then return false end
+    local wasRemoved = false
+    local currentEntries = self:GetCurrentEntries()
+    if currentEntries then
+        if index ~= nil then
+            if currentEntries[index] ~= nil then
+                table.remove(currentEntries, index)
+                wasRemoved = true
+            end
+        else
+            if uniqueKey ~= nil then
+                for idx, entryData in ipairs(currentEntries) do
+                    if uniqueKey == entryData.uniqueKey then
+                        table.remove(currentEntries, idx)
+                        wasRemoved = true
+                        break
+                    end
+                end
+            end
+        end
+        if wasRemoved then
+            self.control:UpdateValue(false, currentEntries)
+            return true
+        end
+    end
+    return false
+end
+
+function OrderListBox:RemoveSelectedEntry()
+    local selectedIndex = ZO_ScrollList_GetSelectedDataIndex(self.scrollListControl)
+--d("OrderListBox:RemoveSelectedEntry-selectedIndex: " ..tostring(selectedIndex))
+    if not selectedIndex then return end
+    self:RemoveValue(selectedIndex, nil)
+end
+
+function OrderListBox:AddNewValue(newText, newValue)
+    if self.disabled then return end
+    if newText == nil or newText == "" then return end
+    local currentEntries = self:GetCurrentEntries()
+    if currentEntries then
+        --Check if newValue is not already added to the list
+        for _, entryData in ipairs(currentEntries) do
+            if newText == entryData.text then return false end
+        end
+
+        --Add the new value to the list now
+        -->Get the next uniqueKey
+        local newUniqueKey = #currentEntries + 1
+        -->Text will be newValue
+        -->if newValue is not provided it will be same as the uniqueKey!
+        newValue = newValue or newUniqueKey
+        currentEntries[newUniqueKey] = {
+            uniqueKey = newUniqueKey,
+            text = newText,
+            value = newValue,
+        }
+        self.control:UpdateValue(false, currentEntries)
+        return true
+    end
+end
+
+function OrderListBox:AddNewValueFromDialog(newText)
+    if self.disabled then return end
+    return self:AddNewValue(newText, nil)
+end
+
+function OrderListBox:ShowAddNewValueDialog(dialogName)
+--d("[LAM]OrderListBox:ShowAddNewValueDialog-dialogName: " ..tostring(dialogName))
+    if self.disabled then return end
+    if self.orderListBoxData.addValueDialog == nil then return end
+    dialogName = dialogName or self.control.addNewValueDialogName
+    if dialogName ~= nil and ZO_Dialogs_IsDialogRegistered(dialogName) then
+        local data --todo anything to add here from e.g. self.orderListBoxData.addValueDialog -> Custom values passed in?
+        ZO_Dialogs_ShowPlatformDialog(dialogName, data, nil)
+    end
+end
 
 function  LAM2_orderlistbox_widget_OnDragStart(draggedControl, mouseButton)
 --d("[LAM2_orderlistbox_widget_OnDragStart] - " ..tostring(draggedControl.dataEntry.data.text))
@@ -1075,6 +1176,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     controlName = controlName or LAMgetDefaultValue(orderListBoxData.reference) or string.format(orderListBoxNameTemplate, tostring(orderListBoxCounter))
     local control = util.CreateLabelAndContainerControl(parent, orderListBoxData, controlName)
     control.isBuilding = true
+    control.orderListBoxName = controlName
 
     local container = control.container
 
@@ -1096,6 +1198,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         if control.isHalfWidth then
             container:SetAnchor(BOTTOMRIGHT, control, BOTTOMRIGHT, 0, 0)
         end
+
         control:SetHeight(container:GetHeight() + control.label:GetHeight())
     else
         control:SetDimensionConstraints(width, minHeight, width, maxHeight)
@@ -1104,13 +1207,128 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     control:SetHandler("OnMouseEnter", function() ZO_Options_OnMouseEnter(control) end)
     control:SetHandler("OnMouseExit", function() ZO_Options_OnMouseExit(control) end)
 
-    control.orderListBox = OrderListBox:New(util.GetTopPanel(parent), control, orderListBoxData)
+    local orderListBox = OrderListBox:New(util.GetTopPanel(parent), control, orderListBoxData)
+    control.orderListBox = orderListBox
 
     if orderListBoxData.warning ~= nil or orderListBoxData.requiresReload then
         control.warning = wm:CreateControlFromVirtual(nil, control, "ZO_Options_WarningIcon")
         control.warning:SetAnchor(RIGHT, control.container, LEFT, -5, 0)
         control.UpdateWarning = util.UpdateWarning
         control:UpdateWarning()
+    end
+
+    --Add a "Add new value" button which opens a ZO_Dialog
+    local addValueDialogData = LAMgetDefaultValue(orderListBoxData.addEntryDialog)
+    if addValueDialogData ~= nil then
+        local title =               addValueDialogData.title or "Add value to box"
+        local text =                addValueDialogData.text or "Enter value:"
+        local textType =            addValueDialogData.textType or TEXT_TYPE_ALL
+        local specialCharacters =   addValueDialogData.specialCharacters or nil
+        local maxInputCharacters =  addValueDialogData.maxInputCharacters or nil
+
+        local dialogName = controlName .. orderListBoxAddNewValueDialogSuffix
+        control.addNewValueDialogName = dialogName
+        if not ZO_Dialogs_IsDialogRegistered(dialogName) then
+            ZO_Dialogs_RegisterCustomDialog(dialogName,
+                    {
+                        gamepadInfo =
+                        {
+                            dialogType = GAMEPAD_DIALOGS.BASIC,
+                        },
+                        title =
+                        {
+                            text = title,
+                        },
+                        mainText =
+                        {
+                            text = text,
+                        },
+                        editBox = {
+                            textType = textType,
+                            specialCharacters = specialCharacters,
+                            maxInputCharacters = maxInputCharacters,
+                        },
+                        buttons =
+                        {
+                            [1] = {
+                                text = SI_DIALOG_ACCEPT,
+                                callback = function(dialog)
+                                    local editControl = dialog:GetNamedChild("EditBox")
+                                    orderListBox:AddNewValueFromDialog(editControl:GetText())
+                                end
+                            },
+                            [2] = {
+                                text = SI_DIALOG_EXIT,
+                            },
+                        },
+                        --noChoiceCallback =
+                    })
+
+            --Add the "Add new value" button -> A small + icon next to the LAM listbox control
+            local addNewValueButton = wm:CreateControl(controlName .. orderListBoxAddNewValueButtonSuffix, control, CT_BUTTON)
+            addNewValueButton:SetDimensions(24, 24)
+
+            local addNewValueButtonTexture = addValueDialogData.buttonTexture
+            local useDefaultButton = addNewValueButtonTexture == nil and true or false
+            if useDefaultButton then
+                addNewValueButton:SetNormalTexture("/esoui/art/buttons/plus_up.dds")
+                addNewValueButton:SetPressedTexture("/esoui/art/buttons/plus_down.dds")
+                addNewValueButton:SetMouseOverTexture("/esoui/art/buttons/plus_over.dds")
+                addNewValueButton:SetDisabledTexture("/esoui/art/buttons/plus_disabled.dds")
+            else
+                addNewValueButton:SetNormalTexture(addNewValueButtonTexture)
+                addNewValueButton:SetPressedOffset(2, 2)
+            end
+            addNewValueButton:SetMouseEnabled(true)
+            addNewValueButton:SetHidden(false)
+            if control.isHalfWidth then
+                addNewValueButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, -24, 0)
+            else
+                addNewValueButton:SetAnchor(TOP, control, TOP, 0, 0)
+            end
+            addNewValueButton:SetClickSound("Click")
+            addNewValueButton.data = { tooltipText = title }
+            addNewValueButton:SetHandler("OnMouseEnter", ZO_Options_OnMouseEnter)
+            addNewValueButton:SetHandler("OnMouseExit", ZO_Options_OnMouseExit)
+            addNewValueButton:SetHandler("OnClicked", function(...)
+                orderListBox:ShowAddNewValueDialog(dialogName)
+            end)
+            control.AddNewValueButton = addNewValueButton
+        end
+    end
+
+    local showRemoveButton = LAMgetDefaultValue(orderListBoxData.showRemoveEntryButton)
+    if showRemoveButton == true then
+        --Add the "Add new value" button -> A small + icon next to the LAM listbox control
+        local removeEntryButton = wm:CreateControl(controlName .. orderListBoxRemoveEntryButtonSuffix, control, CT_BUTTON)
+        removeEntryButton:SetDimensions(24, 24)
+        removeEntryButton:SetNormalTexture("/esoui/art/buttons/minus_up.dds")
+        removeEntryButton:SetPressedTexture("/esoui/art/buttons/minus_down.dds")
+        removeEntryButton:SetMouseOverTexture("/esoui/art/buttons/minus_over.dds")
+        removeEntryButton:SetDisabledTexture("/esoui/art/buttons/minus_disabled.dds")
+        removeEntryButton:SetMouseEnabled(false)
+        removeEntryButton:SetHidden(false)
+        if control.isHalfWidth then
+            if control.AddNewValueButton ~= nil then
+                removeEntryButton:SetAnchor(LEFT, control.AddNewValueButton, RIGHT, 0, 0)
+            else
+                removeEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, -24, 0)
+            end
+        else
+            if control.AddNewValueButton ~= nil then
+                removeEntryButton:SetAnchor(LEFT, control.AddNewValueButton, RIGHT, 0, 0)
+            else
+                removeEntryButton:SetAnchor(TOP, control, TOP, 0, 0)
+            end
+        end
+        removeEntryButton:SetClickSound("Click")
+        removeEntryButton.data = { tooltipText = "Remove selected entry" }
+        removeEntryButton:SetHandler("OnMouseEnter", ZO_Options_OnMouseEnter)
+        removeEntryButton:SetHandler("OnMouseExit", ZO_Options_OnMouseExit)
+        removeEntryButton:SetHandler("OnClicked", function(...)
+            orderListBox:RemoveSelectedEntry()
+        end)
+        control.RemoveEntryButton = removeEntryButton
     end
 
     control.data.tooltipText = LAMgetStringFromValue(orderListBoxData.tooltip)
@@ -1122,6 +1340,12 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     control:UpdateDisabled()
 
     control.isBuilding = false
+
+    local faqTexture = LAM.util.CreateFAQTexture(control)
+    if faqTexture then
+        faqTexture:ClearAnchors()
+        faqTexture:SetAnchor(LEFT, control, RIGHT, 0, 0)
+    end
 
     util.RegisterForRefreshIfNeeded(control)
     util.RegisterForReloadIfNeeded(control)

@@ -1,9 +1,9 @@
 ## APIVersion: 101040 101041
 ## Title: LibAddonMenu-2.0 - OrderListBox widget
-## Version: 10
-## AddOnVersion: 010
+## Version: 11
+## AddOnVersion: 011
 ## IsLibrary: true
-## DependsOn: LibAddonMenu-2.0>=35
+## DependsOn: LibAddonMenu-2.0>=36
 ## Author: Baertram
 ## Description: A listbox widget with manual order possibilities for the library LibAddonMenu-2.0
 ##
