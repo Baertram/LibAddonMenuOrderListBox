@@ -70,12 +70,20 @@ local translations = {
         DOWN            = "Herrunter " .. moveTextLower,
         TOTAL_UP        = "Zum Anfang " .. moveTextLower,
         TOTAL_DOWN      = "Zum Ende " .. moveTextLower,
+        ADD_ENTRY       = "Eintrag hinzufügen",
+        ADD_ENTRY_DESC  = "Wert eingeben:",
+        REMOVE_ENTRY    = "Eintrag entfernen",
+        REMOVE_ENTRY_DESC = "Selektierten Eintrag wirklich entfernen?",
     },
     ["en"] = {
         UP              = moveText .. " up",
         DOWN            = moveText .. " down",
         TOTAL_UP        = moveText .. " to top",
         TOTAL_DOWN      = moveText .. " to bottom",
+        ADD_ENTRY       = "Add entry",
+        ADD_ENTRY_DESC  = "Enter value:",
+        REMOVE_ENTRY    = "Remove entry",
+        REMOVE_ENTRY_DESC = "Really remove selected entry?",
     },
     ["es"] = {
         UP              = "Mover hacia arriba",
@@ -1238,11 +1246,14 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         control:UpdateWarning()
     end
 
+    local addEntryStr = LAMgetStringFromValue(translation.ADD_ENTRY)
+    local addEntryDescStr = LAMgetStringFromValue(translation.ADD_ENTRY_DESC)
+
     --Add a "Add new value" button which opens a ZO_Dialog
     local addEntryDialogData = LAMgetDefaultValue(orderListBoxData.addEntryDialog)
     if addEntryDialogData ~= nil then
-        local title =               LAMgetDefaultValue(addEntryDialogData.title) or "Add value to box"
-        local text =                LAMgetDefaultValue(addEntryDialogData.text) or "Enter value:"
+        local title =               LAMgetDefaultValue(addEntryDialogData.title) or addEntryStr
+        local text =                LAMgetDefaultValue(addEntryDialogData.text) or addEntryDescStr
         local textType =            LAMgetDefaultValue(addEntryDialogData.textType) or TEXT_TYPE_ALL
         local specialCharacters =   LAMgetDefaultValue(addEntryDialogData.specialCharacters) or nil
         local maxInputCharacters =  LAMgetDefaultValue(addEntryDialogData.maxInputCharacters) or nil
@@ -1331,6 +1342,9 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     local askBeforeRemoveEntryDialogName = controlName .. orderListBoxAskBeforeRemoveEntryDialogSuffix
     local showRemoveButton = LAMgetDefaultValue(orderListBoxData.showRemoveEntryButton)
     if showRemoveButton == true then
+        local removeEntryStr = LAMgetStringFromValue(translation.REMOVE_ENTRY)
+        local removeEntryDescStr = LAMgetStringFromValue(translation.REMOVE_ENTRY_DESC)
+
         --Show "Ask before delete dialog"?
         local askBeforeRemoveEntry = LAMgetDefaultValue(orderListBoxData.askBeforeRemoveEntry)
         if askBeforeRemoveEntry then
@@ -1344,11 +1358,11 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
                             },
                             title =
                             {
-                                text = "Remove entry",
+                                text = removeEntryStr,
                             },
                             mainText =
                             {
-                                text = "Do you want to remove the selected entry?",
+                                text = removeEntryDescStr,
                             },
                             buttons =
                             {
@@ -1390,7 +1404,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
             end
         end
         removeEntryButton:SetClickSound("Click")
-        removeEntryButton.data = { tooltipText = "Remove selected entry" }
+        removeEntryButton.data = { tooltipText = removeEntryStr }
         removeEntryButton:SetHandler("OnMouseEnter", ZO_Options_OnMouseEnter)
         removeEntryButton:SetHandler("OnMouseExit", ZO_Options_OnMouseExit)
         removeEntryButton:SetHandler("OnClicked", function(...)
