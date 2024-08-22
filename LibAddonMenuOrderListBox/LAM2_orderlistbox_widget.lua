@@ -36,6 +36,7 @@
     --> example instructions = ZO_ValidNameInstructions:New(GetControl(self, "NameInstructions"), nil, { NAME_RULE_TOO_SHORT, NAME_RULE_CANNOT_START_WITH_SPACE, NAME_RULE_MUST_END_WITH_LETTER })
     showRemoveEntryButton = false, -- or function returning a boolean (optional). Show a button to remove the currently selected entry
     askBeforeRemoveEntry = false, -- or function returning a boolean (optional). If showRemoveEntryButton is enabled: Ask via a dialog if the entry should be removed
+    removeEntryCheckFunction = function(orderListBox, selectedIndex, orderListBoxData) return true end, -- (optional) function returning a boolean (true = remove, false = keep) if the entry can be removed or not
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
     warning = "May cause permanent awesomeness.", -- or string id or function returning a string (optional)
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
@@ -1120,7 +1121,23 @@ function OrderListBox:RemoveSelectedEntry()
     local selectedIndex = ZO_ScrollList_GetSelectedDataIndex(self.scrollListControl)
 --d("OrderListBox:RemoveSelectedEntry-selectedIndex: " ..tostring(selectedIndex))
     if not selectedIndex then return end
-    self:RemoveValue(selectedIndex, nil)
+    local selectedEntry
+    local currentEntries = self:GetCurrentEntries()
+    if currentEntries then
+        local currentlySelectedEntry = currentEntries[selectedIndex]
+        selectedEntry = currentlySelectedEntry --double local to remove direct pointer so it's still available after deleting it below
+    end
+
+    local orderListBoxData = self.orderListBoxData
+    if orderListBoxData and type(orderListBoxData.removeEntryCheckFunction) == "function" then
+        if orderListBoxData.removeEntryCheckFunction(self, selectedIndex, orderListBoxData) == false then return false end
+    end
+
+    if self:RemoveValue(selectedIndex, nil) == true then
+        if selectedEntry and orderListBoxData and type(orderListBoxData.removeEntryCallbackFunction) == "function" then
+            orderListBoxData.removeEntryCallbackFunction(self, selectedEntry, orderListBoxData)
+        end
+    end
 end
 
 function OrderListBox:AddNewEntry(newText, newValue, validateFunction)
@@ -1145,12 +1162,18 @@ function OrderListBox:AddNewEntry(newText, newValue, validateFunction)
         -->Text will be newValue
         -->if newValue is not provided it will be same as the uniqueKey!
         newValue = newValue or newUniqueKey
-        currentEntries[newUniqueKey] = {
+        local newEntry = {
             uniqueKey = newUniqueKey,
             text = newText,
             value = newValue,
         }
+        currentEntries[newUniqueKey] = newEntry
         self.control:UpdateValue(false, currentEntries)
+
+        local orderListBoxData = self.orderListBoxData
+        if orderListBoxData and type(orderListBoxData.addEntryCallbackFunction) == "function" then
+            orderListBoxData.addEntryCallbackFunction(self, newEntry, orderListBoxData)
+        end
         return true
     end
 end
