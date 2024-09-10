@@ -1,0 +1,114 @@
+## This widget is not included into LibAddonMenu and needs to be separately download from www.esoui.com:
+https://www.esoui.com/downloads/info3080-LibAddonMenu-OrderListBoxwidget.html
+
+![OrderListBox example image](https://cdn-eso.mmoui.com/preview/pvw10305.png)
+
+## Possibilities:
+1. Button to move a selected entry 1 up
+1. Button to move a selected entry 1 down
+1. Button to move a selected entry to the top
+1. Button to move a selected entry to the bottom
+1. All buttons can be disabled via the orderListBoxData table
+1. Drag & drop of an entry (up and down)
+1. Show dragged list entry text as label near the cursor
+1. Auto scroll up/down if dragging entries to the upper/lower part of the list
+1. Drag & drop can be disabled via the orderListBoxData table
+1. Show number of position in front of the text of an entry
+1. Number of position is disabled by default via the orderListBoxData table
+1. Show value of entry after the entry text (surrounded by [])
+1. Show value of entry after the tooltip text of an entry (surrounded by [])
+1. Show button to open a "add new entry" dialog with multiple features (ZO_Dialog textbox with validation function, maxInputCharacters etc.)
+1. Show button to delete a selected entry (with "ask before" dialog, or w/o).
+
+
+## Data Table
+|  property           |  type                    | default | required |                            description                                             |
+|:--------------------|:-------------------------|:--------|:---------|:-----------------------------------------------------------------------------------|
+| type                | string                   | -       | yes      | The widget type of this control ("orderlistbox")                                         |
+| name                | string                   | -       | yes      | My OrderListBox", string id or function returning a string                              |
+| getFunc        | function                 | -       | yes      | function() return db.listEntries, -- (table containing the list entries)                    |
+| setFunc        | function                 | -       | yes      | function(orderedListEntries) db.listEntries = orderedListEntries
+| tooltip             | number, string, function | nil     | no       | "OrderListBox's tooltip text.", or string id or function returning a string                 |
+| width               | string                   | "full"  | no       | "full" or "half" width in the panel                                                
+| isExtraWide         | boolean                  | false   | no       | Draws the listbox extra wide
+| minHeight      | number                   | 125      | no       | number for the minimum height of this control. Standard is (rowMinHeight = 25) multiplied by 5
+| maxHeight      | number                   | 125     | no       | number for the maximum height of this control. Standard is (minHeight)
+| rowHeight      | number                   | 25      | no       | function() return db.rowHeightNumber end, --or number for the height of the row of the entries in listEntries. Default: 25 (optional)
+| rowTemplate      | String | "LAM2_Orderlistbox_<br>Widget_Scrolllist_Row" | no       | String or function returning String defining the XML virtual template control for a row of the listEntries (optional) Make sure to add the handlers OnDragStart and OnReceiveDrag to your virtual row template! Check XML file LAM2_orderlistbox_widget.xml, virtual control "LAM2_OrderListBox_Widget_Scrolllist_Row" as template!
+| rowFont      | String | "ZoFontWinH4"      | no       |  String or function returning a String of the font to use for the row (optional),
+| rowMaxLineCount      | number                   | 1 | no       |  Number or function returning a number of the maximum text lines within the row. 1 = Only 1 text line, no wrapping, get's truncated. (optional)
+| rowSelectionTemplate      | String | "ZO_ThinListHighlight"      | no       | String or function returning a String defining the XML virtual template control for the selection at a row of the listEntries (optional)
+| rowSelectedCallback      | function | nil | no | function doStuffOnSelection(rowControl, previouslySelectedData, selectedData, reselectingDuringRebuild) end, An optional callback function when a row of the listEntries got selected. The standard selection callback function, adding the selection XML template, will always run BEFORE this optional one (optional)
+| rowHideCallback      | function | nil | no       |  function doStuffOnHide(rowControl, currentRowData) end, An optional callback function when a row of the listEntries got hidden (optional)
+| dataTypeSelectSound      | String | "NONE" | no | String or function returning a String of a sound from the global SOUNDS table. Will be played as any row containing the datatype (1) of the orderListBox will be selected (optional)
+| dataTypeResetControlCallback      | function | nil | no       |  function doStuffOnReset(control) end, An optional callback function when the datatype control gets reset. (optional)
+| disableDrag    | boolean, function        | false   | no       | boolean or function returning a boolean (optional). Disable the drag&drop of the rows
+| disableButtons | boolean, function        | false   | no       | function returning a boolean (optional). Disable the move up/move down/move to top/move to bottom buttons
+| showPosition   | boolean, function        | false   | no       | or function returning a boolean (optional). Show the position number in front of the list entry
+| showValue | boolean, function        | false   | no       | or function returning a boolean (optional). Show the value of the entry after the list entry text, surrounded by []
+| showValueAtTooltip | boolean, function        | false   | no       | or function returning a boolean (optional). Show the value of the entry after the tooltip text, surrounded by []
+| addEntryDialog | table, function  | nil | no | or function returning a table. { title="Add new entry", text="Enter new text here", textType=TEXT_TYPE_ALL, buttonTexture="", maxInputCharacters=0, specialCharacters={"a", "b", "c"}, selectAll=false, defaultText="Type text here", validatesText=false, validator = function(text) return type(text) == "string" end, instructions=table (example See line below) }.   If the table exists: Add an "Add value" button to the list which opens a dialog. Inside the table you can pass in additional data and options to the ZO_Dialog dialog, e.g. title, text, editbox in dialog only accepts digits -> TEXT_TYPE_NUMERIC_UNSIGNED_INT, and other custom data. Example instructions = ZO_ValidNameInstructions:New(GetControl(self, "NameInstructions"), nil, { NAME_RULE_TOO_SHORT, NAME_RULE_CANNOT_START_WITH_SPACE, NAME_RULE_MUST_END_WITH_LETTER })
+| showRemoveEntryButton | boolean, function | false | no | or function returning a boolean (optional). Show a button to remove the currently selected entry
+| askBeforeRemoveEntry | boolean, function | false | no | or function returning a boolean (optional). If showRemoveEntryButton is enabled: Ask via a dialog if the entry should be removed
+| disabled            | boolean, function        | false   | no       | Determines if the order listbox is disabled and its value cannot be changed               | warning             | number, string, function | nil     | no       | Shows a warning icon beside the button which has a tooltip with some warning text  
+| requiresReload | boolean                  | false   | no       | Appends a special warning text and shows a reload button if the value is changed        
+| default        | number, function         | nil     | no       | listEntries = defaults.listEntries , table of default date values (or default = defaultEntries, where defaultEntries is a table with the list entries) or a function that returns the list entries
+| helpUrl           | string, function      | -       | no       | A string URL "https://www.esoui.com", or a function that returns one |
+| reference      | string                   | nil     | no       | A unique global reference to the control
+
+## Examples
+```lua
+settings.iconSortOrderEntries = {
+        [1] = {
+            value = "Value of the entry 1", -- or number or boolean or function returning the value of this entry
+            uniqueKey = 1, --number of the unique key of this list entry. This will not change if the order changes. Will be used to identify the entry uniquely
+            text  = "Text of this entry 1", -- or string id or function returning a string (optional)
+            tooltip = "Tooltip text shown at this entry 1", -- or string id or function returning a string (optional)
+        },
+        [2] = {
+            value = "Value of the entry 2", -- or number or boolean or function returning the value of this entry
+            uniqueKey = 2, --number of the unique key of this list entry. This will not change if the order changes. Will be used to identify the entry uniquely
+            text  = "Text of this entry 2", -- or string id or function returning a string (optional)
+            tooltip = "Tooltip text shown at this entry 2", -- or string id or function returning a string (optional)
+        },
+}
+
+{
+    type = "orderlistbox",
+    name = "Order list box 1",
+    tooltip = "Tooltip of the order list box 1",
+    listEntries = settings.iconSortOrderEntries,
+    disableDrag = false,
+    disableButtons = false,
+    showPosition = false,
+    getFunc = function() return settings.iconSortOrderEntries end,
+    setFunc = function(sortedSortListEntries)
+        settings.iconSortOrderEntries = sortedSortListEntries
+        for idx, data in ipairs(sortedSortListEntries) do
+            settings.icon[data.value].sortOrder = idx
+            settings.iconSortOrder[idx] = data.value
+        end
+    end,
+    width="full",
+    minHeight = 250,
+    maxHeight = 400,
+    disabled = function() return false  end,
+    reference = "MyAddon_Settings_IconSortOrder_OrderListBox",
+    disabled = function() return not settings.sortIcons end,
+    default = defaultSettings.iconSortOrderEntries,
+            addEntryDialog = {
+                title="Add new value",
+                text="Enter new value here",
+                textType=TEXT_TYPE_ALL,
+                --buttonTexture="/esoui/art/buttons/minus_up.dds",
+                --maxInputCharacters=3,
+                --specialCharacters={"a", "b", "c"},
+                --defaultText = "Default text",
+                --instructions = ZO_ValidNameInstructions:New(GetControl(self, "NameInstructions"), nil, { NAME_RULE_TOO_SHORT, NAME_RULE_CANNOT_START_WITH_SPACE, NAME_RULE_MUST_END_WITH_LETTER })
+                validatesText = true,
+                validator = function(text) return text ~= nil and text ~= "" end
+            },
+            showRemoveEntryButton = true,
+            askBeforeRemoveEntry = function() return true end
+},
+```
