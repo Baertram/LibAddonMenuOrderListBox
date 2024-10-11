@@ -34,9 +34,11 @@
     showValueAtTooltip = false, -- or function returning a boolean (optional). Show the value of the entry after the tooltip text, surrounded by []
     addEntryDialog = { title="Add new entry", text="Enter new text here", textType=TEXT_TYPE_ALL, buttonTexture="", maxInputCharacters=0, specialCharacters={"a", "b", "c"}, selectAll=false, defaultText="Type text here", validatesText=false, validator = function(text) return type(text) == "string" end, instructions=table (example See line below) }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a dialog. Inside the table you can pass in additional data and options to the ZO_Dialog dialog, e.g. title, text, editbox in dialog only accepts digits -> TEXT_TYPE_NUMERIC_UNSIGNED_INT, and other custom data
     --> example instructions = ZO_ValidNameInstructions:New(GetControl(self, "NameInstructions"), nil, { NAME_RULE_TOO_SHORT, NAME_RULE_CANNOT_START_WITH_SPACE, NAME_RULE_MUST_END_WITH_LETTER })
+    addEntryCallbackFunction = function(orderListBox, newAddedEntry, orderListBoxData) return true end, -- (optional) function returning a boolean (true = added, false = not added) called as the entry get's added,
     showRemoveEntryButton = false, -- or function returning a boolean (optional). Show a button to remove the currently selected entry
     askBeforeRemoveEntry = false, -- or function returning a boolean (optional). If showRemoveEntryButton is enabled: Ask via a dialog if the entry should be removed
     removeEntryCheckFunction = function(orderListBox, selectedIndex, orderListBoxData) return true end, -- (optional) function returning a boolean (true = remove, false = keep) if the entry can be removed or not
+    removeEntryCallbackFunction = function(orderListBox, selectedEntry, orderListBoxData) return true end, -- (optional) function returning a boolean (true = removed, false = not removed) called as the entry get's removed,
     disabled = function() return db.someBooleanSetting end, -- or boolean (optional)
     warning = "May cause permanent awesomeness.", -- or string id or function returning a string (optional)
     requiresReload = false, -- boolean, if set to true, the warning text will contain a notice that changes are only applied after an UI reload and any change to the value will make the "Apply Settings" button appear on the panel which will reload the UI when pressed (optional)
@@ -45,7 +47,7 @@
     reference = "MyAddonOrderListBox" -- function returning String, or String unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 11
+local widgetVersion = 12
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -1135,7 +1137,7 @@ function OrderListBox:RemoveSelectedEntry()
 
     if self:RemoveValue(selectedIndex, nil) == true then
         if selectedEntry and orderListBoxData and type(orderListBoxData.removeEntryCallbackFunction) == "function" then
-            orderListBoxData.removeEntryCallbackFunction(self, selectedEntry, orderListBoxData)
+            return orderListBoxData.removeEntryCallbackFunction(self, selectedEntry, orderListBoxData)
         end
     end
 end
@@ -1172,7 +1174,7 @@ function OrderListBox:AddNewEntry(newText, newValue, validateFunction)
 
         local orderListBoxData = self.orderListBoxData
         if orderListBoxData and type(orderListBoxData.addEntryCallbackFunction) == "function" then
-            orderListBoxData.addEntryCallbackFunction(self, newEntry, orderListBoxData)
+            return orderListBoxData.addEntryCallbackFunction(self, newEntry, orderListBoxData)
         end
         return true
     end
