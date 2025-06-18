@@ -23,8 +23,8 @@
     rowFont = "ZoFontWinH4", --or function returning a String of the font to use for the row (optional),
     rowMaxLineCount = 1, --or function returning a number of the maximum text lines within the row. 1 = Only 1 text line, no wrapping, get#s truncated. (optional)
     rowSelectionTemplate = "ZO_ThinListHighlight", --String defining the XML virtual template control for the selection at a row of the listEntries (optional)
-    rowSelectedCallback = function doStuffOnSelection(rowControl, previouslySelectedData, selectedData, reselectingDuringRebuild) end, --An optional callback function when a row of the listEntries got selected (optional)
-    rowHideCallback = function doStuffOnHide(rowControl, currentRowData) end, --An optional callback function when a row of the listEntries got hidden (optional)
+    rowSelectedCallback = function() doStuffOnSelection(rowControl, previouslySelectedData, selectedData, reselectingDuringRebuild) end, --An optional callback function when a row of the listEntries got selected (optional)
+    rowHideCallback = function() doStuffOnHide(rowControl, currentRowData) end, --An optional callback function when a row of the listEntries got hidden (optional)
     dataTypeSelectSound = SOUNDS["NONE"], --or function returning a String of a sound from the global SOUNDS table. Will be played as any row containing the datatype (1) of the orderListBox will be selected (optional)
     dataTypeResetControlCallback = function doStuffOnReset(control) end, --An optional callback function when the datatype control gets reset. (optional)
     disableDrag = false, -- or function returning a boolean (optional). Disable the drag&drop of the rows
@@ -47,7 +47,7 @@
     reference = "MyAddonOrderListBox" -- function returning String, or String unique global reference to control (optional)
 } ]]
 
-local widgetVersion = 12
+local widgetVersion = 13
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -1336,7 +1336,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
             addNewEntryButton:SetDimensions(24, 24)
 
             local addNewValueButtonTexture = LAMgetDefaultValue(addEntryDialogData.buttonTexture)
-            local useDefaultButton = addNewValueButtonTexture == nil and true or false
+            local useDefaultButton = (addNewValueButtonTexture == nil or addNewValueButtonTexture == "" and true) or false
             if useDefaultButton then
                 addNewEntryButton:SetNormalTexture("/esoui/art/buttons/plus_up.dds")
                 addNewEntryButton:SetPressedTexture("/esoui/art/buttons/plus_down.dds")
