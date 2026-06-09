@@ -34,7 +34,8 @@
     showValueAtTooltip = false, -- or function returning a boolean (optional). Show the value of the entry after the tooltip text, surrounded by []
     addEntryDialog = { title="Add new entry", text="Enter new text here", textType=TEXT_TYPE_ALL, buttonTexture="", maxInputCharacters=0, specialCharacters={"a", "b", "c"}, selectAll=false, defaultText="Type text here", validatesText=false, validator = function(text) return type(text) == "string" end, instructions=table (example See line below) }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a dialog. Inside the table you can pass in additional data and options to the ZO_Dialog dialog, e.g. title, text, editbox in dialog only accepts digits -> TEXT_TYPE_NUMERIC_UNSIGNED_INT, and other custom data
     --> example instructions = ZO_ValidNameInstructions:New(GetControl(self, "NameInstructions"), nil, { NAME_RULE_TOO_SHORT, NAME_RULE_CANNOT_START_WITH_SPACE, NAME_RULE_MUST_END_WITH_LETTER })
-    addEntryCallbackFunction = function(orderListBox, newAddedEntry, orderListBoxData) return true end, -- (optional) function returning a boolean (true = added, false = not added) called as the entry get's added,
+    addCustomEntryDialog = { title="Add new entry", buttonTexture="", customAddFunction = function(orderListBox, dialog) get new entry data from custom dialog XML controls and return text, value end, validator = function(text) return type(text) == "string" end, XMLtemplate = "MyGlobalXMLDialogTemplateWithTitleAndCustomControls_InheritedFrom_ZO_CustomDialogBase_with_Accept_and_Cancel_buttons",  }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a custom XML dialog, with your XML template. The dialog has 2 buttons, 1 for accept and 1 for decline. It can have custom controls like a dropdown/slider/exitBox. You must specify a customAddFunction(orderListBoxObject, dialog) which returns text, value of the new added entry!
+    addEntryCallbackFunction = function(orderListBox, newAddedEntry, orderListBoxData) return true end, -- (optional) function returning a boolean (true = added, false = not added) called as the entry get's added via the add(Custom)EntryDialog
     showRemoveEntryButton = false, -- or function returning a boolean (optional). Show a button to remove the currently selected entry
     askBeforeRemoveEntry = false, -- or function returning a boolean (optional). If showRemoveEntryButton is enabled: Ask via a dialog if the entry should be removed
     removeEntryCheckFunction = function(orderListBox, selectedIndex, orderListBoxData) return true end, -- (optional) function returning a boolean (true = remove, false = keep) if the entry can be removed or not
@@ -45,9 +46,36 @@
     default = defaults.var, -- default value or function that returns the default value (optional)
     helpUrl = "https://www.esoui.com/portal.php?id=218&a=faq", -- a string URL or a function that returns the string URL (optional)
     reference = "MyAddonOrderListBox" -- function returning String, or String unique global reference to control (optional)
-} ]]
+}
 
-local widgetVersion = 13
+
+
+----Example addCustomEntryDialog.XMLtemplate:
+            <TopLevelControl name="MyGlobalXMLDialogTemplateWithTitleAndCustomControls" inherits="ZO_CustomDialogBase" mouseEnabled="true" virtual="true">
+                <OnInitialized>
+                </OnInitialized>
+                <Controls>
+                    <!-- 1 custom control label with child name "Value" here -->
+                    <Label name="$(parent)Value" text="Hello!" verticalAlignment="CENTER" font="ZoFontWinH5" color="INTERFACE_COLOR_TYPE_TEXT_COLORS:INTERFACE_TEXT_COLOR_CONTEXT_HIGHLIGHT" maxLineCount="1">
+                        <Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="0" />
+                    </Label>
+                    <Control name="$(parent)Cancel" inherits="ZO_CustomDialogButton"/>
+                    <Control name="$(parent)Accept" inherits="ZO_CustomDialogButton"/>
+                </Controls>
+            </TopLevelControl>
+
+----Example of addCustomEntryDialog.customAddFunction:
+            customAddFunction = function(orderListBox, dialog)
+                --Get the child control "Value" -> the label
+                local value = dialog:GetNamedChild("Value")
+                if value then
+                    --Return the label's text as newText for the entry, and the value = nil (will be set automatically to current #listEntries + 1, if missing in returned 2nd parameter)
+                    return value:GetText(), nil
+                end
+            end,
+]]
+
+local widgetVersion = 14
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -1185,14 +1213,23 @@ function OrderListBox:AddNewEntryFromDialog(newText, validateFunction)
     return self:AddNewEntry(newText, nil, validateFunction)
 end
 
+function OrderListBox:AddNewEntryFromCustomDialog(dialog, customAddFunction, validateFunction)
+--d("[OrderListBox]AddNewEntryFromCustomDialog")
+    if self.disabled then return end
+    local text, value = customAddFunction(self, dialog)
+    return self:AddNewEntry(text, value, validateFunction)
+end
+
+
 function OrderListBox:ShowAddNewEntryDialog(dialogName)
 --d("[LAM]OrderListBox:ShowAddNewEntryDialog-dialogName: " ..tostring(dialogName))
     if self.disabled then return end
-    if self.orderListBoxData.addEntryDialog == nil then return end
+    local orderListBoxData = self.orderListBoxData
+    if orderListBoxData.addEntryDialog == nil and orderListBoxData.addCustomEntryDialog == nil then return end
     dialogName = dialogName or self.control.addNewEntryDialogName
     if dialogName ~= nil and ZO_Dialogs_IsDialogRegistered(dialogName) then
         local data
-        ZO_Dialogs_ShowPlatformDialog(dialogName, data, nil)
+        ZO_Dialogs_ShowPlatformDialog(dialogName, data)
     end
 end
 
@@ -1203,17 +1240,17 @@ function OrderListBox:ShowAskBeforeRemoveEntryDialog(dialogName)
     dialogName = dialogName or self.control.askBeforeRemoveEntryDialogName
     if dialogName ~= nil and ZO_Dialogs_IsDialogRegistered(dialogName) then
         local data
-        ZO_Dialogs_ShowPlatformDialog(dialogName, data, nil)
+        ZO_Dialogs_ShowPlatformDialog(dialogName, data)
     end
 end
 
 
-function  LAM2_orderlistbox_widget_OnDragStart(draggedControl, mouseButton)
+function LAM2_orderlistbox_widget_OnDragStart(draggedControl, mouseButton)
 --d("[LAM2_orderlistbox_widget_OnDragStart] - " ..tostring(draggedControl.dataEntry.data.text))
     local orderListBox = draggedControl:GetParent():GetParent():GetParent().orderListBox
     orderListBox:StartDragging(draggedControl, mouseButton)
 end
-function  LAM2_orderlistbox_widget_OnReceiveDrag(draggedOnToControl, mouseButton)
+function LAM2_orderlistbox_widget_OnReceiveDrag(draggedOnToControl, mouseButton)
 --d("[LAM2_orderlistbox_widget_OnReceiveDrag] - " ..tostring(draggedOnToControl.dataEntry.data.text))
     local orderListBox = draggedOnToControl:GetParent():GetParent():GetParent().orderListBox
     orderListBox:StopDragging(draggedOnToControl, mouseButton)
@@ -1274,10 +1311,71 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     local addEntryStr = LAMgetStringFromValue(translation.ADD_ENTRY)
     local addEntryDescStr = LAMgetStringFromValue(translation.ADD_ENTRY_DESC)
 
-    --Add a "Add new value" button which opens a ZO_Dialog
+
+    --Add a "Add new value" button which opens a ZO_Dialog with default editbox, or a ZO_Dialog with csutom controls where one must be named "Value" and hold the new added entry value
     local addEntryDialogData = LAMgetDefaultValue(orderListBoxData.addEntryDialog)
-    if addEntryDialogData ~= nil then
-        local title =               LAMgetDefaultValue(addEntryDialogData.title) or addEntryStr
+    local useAddEntryDialog = false
+    local addCustomEntryDialogData = LAMgetDefaultValue(orderListBoxData.addCustomEntryDialog)
+    local useCustomAddEntryDialog = false
+
+    local dialogTitle, addNewEntryDialogName
+
+    --Custom dialog
+    if addCustomEntryDialogData ~= nil then
+        if addCustomEntryDialogData.XMLtemplate ~= nil then
+            dialogTitle =               LAMgetDefaultValue(addCustomEntryDialogData.title) or addEntryStr
+--d(">found addCustomEntryDialogData title: " .. tostring(dialogTitle) .. ", XML template: " ..tostring(addCustomEntryDialogData.XMLtemplate))
+            local customAddFunction =   addCustomEntryDialogData.customAddFunction or nil
+            if type(customAddFunction) == "function" then
+                local validateFunction =    addCustomEntryDialogData.validator or nil
+--d(">>customAddFunction was provided")
+                addNewEntryDialogName   = controlName .. orderListBoxAddNewEntryDialogSuffix
+--d(">>addNewEntryDialogName: " ..tostring(addNewEntryDialogName))
+                control.addNewEntryDialogName = addNewEntryDialogName
+                local XMLcustomControl = CreateControlFromVirtual(addNewEntryDialogName .. "CustomControl", nil, addCustomEntryDialogData.XMLtemplate)
+
+                if not ZO_Dialogs_IsDialogRegistered(addNewEntryDialogName) then
+                    useCustomAddEntryDialog = true
+
+                    ZO_Dialogs_RegisterCustomDialog(addNewEntryDialogName,
+                            {
+                                gamepadInfo =
+                                {
+                                    dialogType = GAMEPAD_DIALOGS.CUSTOM,
+                                },
+                                customControl = XMLcustomControl,
+                                title =
+                                {
+                                    text = dialogTitle,
+                                },
+                                mainText =
+                                {
+                                    text = dialogTitle,
+                                },
+                                buttons =
+                                {
+                                    [1] = {
+                                        text = SI_DIALOG_ACCEPT,
+                                        callback = function(dialog)
+                                            orderListBox:AddNewEntryFromCustomDialog(dialog, customAddFunction, validateFunction)
+                                        end,
+                                        control = XMLcustomControl:GetNamedChild("Accept"),
+                                    },
+                                    [2] = {
+                                        text = SI_DIALOG_EXIT,
+                                        control = XMLcustomControl:GetNamedChild("Cancel"),
+                                    },
+                                },
+                                --noChoiceCallback =
+                            })
+                end
+            end
+        end
+    end
+
+    --Default ZO_Dialog
+    if not useCustomAddEntryDialog and addEntryDialogData ~= nil then
+        dialogTitle =               LAMgetDefaultValue(addEntryDialogData.title) or addEntryStr
         local text =                LAMgetDefaultValue(addEntryDialogData.text) or addEntryDescStr
         local textType =            LAMgetDefaultValue(addEntryDialogData.textType) or TEXT_TYPE_ALL
         local specialCharacters =   LAMgetDefaultValue(addEntryDialogData.specialCharacters) or nil
@@ -1288,9 +1386,11 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         local instructions =        LAMgetDefaultValue(addEntryDialogData.instructions) or nil
         local selectAll =           LAMgetDefaultValue(addEntryDialogData.selectAll) or nil
 
-        local addNewEntryDialogName   = controlName .. orderListBoxAddNewEntryDialogSuffix
+        addNewEntryDialogName   = controlName .. orderListBoxAddNewEntryDialogSuffix
         control.addNewEntryDialogName = addNewEntryDialogName
         if not ZO_Dialogs_IsDialogRegistered(addNewEntryDialogName) then
+            useAddEntryDialog = true
+
             ZO_Dialogs_RegisterCustomDialog(addNewEntryDialogName,
                     {
                         gamepadInfo =
@@ -1299,7 +1399,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
                         },
                         title =
                         {
-                            text = title,
+                            text = dialogTitle,
                         },
                         mainText =
                         {
@@ -1330,38 +1430,40 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
                         },
                         --noChoiceCallback =
                     })
-
-            --Add the "Add new value" button -> A small + icon next to the LAM listbox control
-            local addNewEntryButton = wm:CreateControl(controlName .. orderListBoxAddNewEntryButtonSuffix, control, CT_BUTTON)
-            addNewEntryButton:SetDimensions(24, 24)
-
-            local addNewValueButtonTexture = LAMgetDefaultValue(addEntryDialogData.buttonTexture)
-            local useDefaultButton = (addNewValueButtonTexture == nil or addNewValueButtonTexture == "" and true) or false
-            if useDefaultButton then
-                addNewEntryButton:SetNormalTexture("/esoui/art/buttons/plus_up.dds")
-                addNewEntryButton:SetPressedTexture("/esoui/art/buttons/plus_down.dds")
-                addNewEntryButton:SetMouseOverTexture("/esoui/art/buttons/plus_over.dds")
-                addNewEntryButton:SetDisabledTexture("/esoui/art/buttons/plus_disabled.dds")
-            else
-                addNewEntryButton:SetNormalTexture(addNewValueButtonTexture)
-                addNewEntryButton:SetPressedOffset(2, 2)
-            end
-            addNewEntryButton:SetMouseEnabled(true)
-            addNewEntryButton:SetHidden(false)
-            if control.isHalfWidth then
-                addNewEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, -24, 0)
-            else
-                addNewEntryButton:SetAnchor(TOP, control, TOP, 0, 0)
-            end
-            addNewEntryButton:SetClickSound("Click")
-            addNewEntryButton.data = { tooltipText = title }
-            addNewEntryButton:SetHandler("OnMouseEnter", ZO_Options_OnMouseEnter)
-            addNewEntryButton:SetHandler("OnMouseExit", ZO_Options_OnMouseExit)
-            addNewEntryButton:SetHandler("OnClicked", function(...)
-                orderListBox:ShowAddNewEntryDialog(addNewEntryDialogName)
-            end)
-            control.AddNewEntryButton = addNewEntryButton
         end
+    end
+
+    --Add the "Add new value" button -> A small + icon next to the LAM listbox control
+    if useCustomAddEntryDialog or useAddEntryDialog then
+        local addNewEntryButton = wm:CreateControl(controlName .. orderListBoxAddNewEntryButtonSuffix, control, CT_BUTTON)
+        addNewEntryButton:SetDimensions(24, 24)
+
+        local addNewValueButtonTexture = LAMgetDefaultValue((useCustomAddEntryDialog and addCustomEntryDialogData.buttonTexture) or (useAddEntryDialog and addEntryDialogData.buttonTexture)) or nil
+        local useDefaultButton = (addNewValueButtonTexture == nil or addNewValueButtonTexture == "" and true) or false
+        if useDefaultButton then
+            addNewEntryButton:SetNormalTexture("/esoui/art/buttons/plus_up.dds")
+            addNewEntryButton:SetPressedTexture("/esoui/art/buttons/plus_down.dds")
+            addNewEntryButton:SetMouseOverTexture("/esoui/art/buttons/plus_over.dds")
+            addNewEntryButton:SetDisabledTexture("/esoui/art/buttons/plus_disabled.dds")
+        else
+            addNewEntryButton:SetNormalTexture(addNewValueButtonTexture)
+            addNewEntryButton:SetPressedOffset(2, 2)
+        end
+        addNewEntryButton:SetMouseEnabled(true)
+        addNewEntryButton:SetHidden(false)
+        if control.isHalfWidth then
+            addNewEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, -24, 0)
+        else
+            addNewEntryButton:SetAnchor(TOP, control, TOP, 0, 0)
+        end
+        addNewEntryButton:SetClickSound("Click")
+        addNewEntryButton.data = { tooltipText = dialogTitle }
+        addNewEntryButton:SetHandler("OnMouseEnter", ZO_Options_OnMouseEnter)
+        addNewEntryButton:SetHandler("OnMouseExit", ZO_Options_OnMouseExit)
+        addNewEntryButton:SetHandler("OnClicked", function(...)
+            orderListBox:ShowAddNewEntryDialog(addNewEntryDialogName)
+        end)
+        control.AddNewEntryButton = addNewEntryButton
     end
 
     local askBeforeRemoveEntryDialogName = controlName .. orderListBoxAskBeforeRemoveEntryDialogSuffix
@@ -1373,7 +1475,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         --Show "Ask before delete dialog"?
         local askBeforeRemoveEntry = LAMgetDefaultValue(orderListBoxData.askBeforeRemoveEntry)
         if askBeforeRemoveEntry then
-        control.askBeforeRemoveEntryDialogName = askBeforeRemoveEntryDialogName
+            control.askBeforeRemoveEntryDialogName = askBeforeRemoveEntryDialogName
             if not ZO_Dialogs_IsDialogRegistered(askBeforeRemoveEntryDialogName) then
                 ZO_Dialogs_RegisterCustomDialog(askBeforeRemoveEntryDialogName,
                         {
