@@ -59,6 +59,7 @@
                     <Label name="$(parent)Value" text="Hello!" verticalAlignment="CENTER" font="ZoFontWinH5" color="INTERFACE_COLOR_TYPE_TEXT_COLORS:INTERFACE_TEXT_COLOR_CONTEXT_HIGHLIGHT" maxLineCount="1">
                         <Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="0" />
                     </Label>
+                    <!-- 2 default buttons - mandatory! -->
                     <Control name="$(parent)Cancel" inherits="ZO_CustomDialogButton"/>
                     <Control name="$(parent)Accept" inherits="ZO_CustomDialogButton"/>
                 </Controls>
