@@ -85,8 +85,8 @@
                 </OnInitialized>
                 <Controls>
                     <Control name="$(parent)Value" inherits="ZO_ComboBox" mouseEnabled="true">
-                        <Dimensions x="400" y="20" />
-                        <Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="30" offsetY="30" />
+                        <Dimensions x="350" y="20" />
+                        <Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="30" offsetY="60" />
                     </Control>
                     <Control name="$(parent)Cancel" inherits="ZO_CustomDialogButton"/>
                     <Control name="$(parent)Accept" inherits="ZO_CustomDialogButton"/>
@@ -98,7 +98,8 @@
                 local comboBox = dialog:GetNamedChild("Value")
                 if comboBox then
                     d(">found combobox")
-                    local selectedItem = comboBox:GetSelectedItemData()
+                    local dropdown = ZO_ComboBox_ObjectFromContainer(comboBox)
+                    local selectedItem = dropdown:GetSelectedItemData()
                     if selectedItem ~= nil then
                         d(">found combobox selectedItemData")
                         local data = selectedItem.data or selectedItem
