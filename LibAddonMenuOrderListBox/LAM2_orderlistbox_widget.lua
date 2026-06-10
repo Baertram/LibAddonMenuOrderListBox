@@ -34,7 +34,7 @@
     showValueAtTooltip = false, -- or function returning a boolean (optional). Show the value of the entry after the tooltip text, surrounded by []
     addEntryDialog = { title="Add new entry", text="Enter new text here", textType=TEXT_TYPE_ALL, buttonTexture="", maxInputCharacters=0, specialCharacters={"a", "b", "c"}, selectAll=false, defaultText="Type text here", validatesText=false, validator = function(text) return type(text) == "string" end, instructions=table (example See line below) }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a dialog. Inside the table you can pass in additional data and options to the ZO_Dialog dialog, e.g. title, text, editbox in dialog only accepts digits -> TEXT_TYPE_NUMERIC_UNSIGNED_INT, and other custom data
     --> example instructions = ZO_ValidNameInstructions:New(GetControl(self, "NameInstructions"), nil, { NAME_RULE_TOO_SHORT, NAME_RULE_CANNOT_START_WITH_SPACE, NAME_RULE_MUST_END_WITH_LETTER })
-    addCustomEntryDialog = { title="Add new entry", buttonTexture="", customAddFunction = function(orderListBox, dialog) get new entry data from custom dialog XML controls and return text, value end, validator = function(text) return type(text) == "string" end, XMLtemplate = "MyGlobalXMLDialogTemplateWithTitleAndCustomControls_InheritedFrom_ZO_CustomDialogBase_with_Accept_and_Cancel_buttons",  }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a custom XML dialog, with your XML template. The dialog has 2 buttons, 1 for accept and 1 for decline. It can have custom controls like a dropdown/slider/exitBox. You must specify a customAddFunction(orderListBoxObject, dialog) which returns text, value of the new added entry!
+    addCustomEntryDialog = { title="Add new entry", buttonTexture="", customAddFunction = function(orderListBox, dialog) get new entry data from custom dialog XML controls and return text, value end, customSetupFunction = function(orderListBox, dialog) get the dialog's child controls which your XML tempalte added and populate entries into them, e.g. a dropdown/ZO_ComboBox end, validator = function(text) return type(text) == "string" end, XMLtemplate = "MyGlobalXMLDialogTemplateWithTitleAndCustomControls_InheritedFrom_ZO_CustomDialogBase_with_Accept_and_Cancel_buttons",  }, -- or function returning a table (optional). If the table exists: Add an "Add value" button to the list which opens a custom XML dialog, with your XML template. The dialog has 2 buttons, 1 for accept and 1 for decline. It can have custom controls like a dropdown/slider/exitBox. You must specify a customAddFunction(orderListBoxObject, dialog) which returns text, value of the new added entry!
     addEntryCallbackFunction = function(orderListBox, newAddedEntry, orderListBoxData) return true end, -- (optional) function returning a boolean (true = added, false = not added) called as the entry get's added via the add(Custom)EntryDialog
     showRemoveEntryButton = false, -- or function returning a boolean (optional). Show a button to remove the currently selected entry
     askBeforeRemoveEntry = false, -- or function returning a boolean (optional). If showRemoveEntryButton is enabled: Ask via a dialog if the entry should be removed
@@ -48,9 +48,11 @@
     reference = "MyAddonOrderListBox" -- function returning String, or String unique global reference to control (optional)
 }
 
-
-
-----Example addCustomEntryDialog.XMLtemplate:
+------------------------------------------------------------------------------------------------------------------------
+--[Custom Dialog examples]
+------------------------------------------------------------------------------------------------------------------------
+----Example1 - Simple label at dialog
+------addCustomEntryDialog.XMLtemplate:
             <TopLevelControl name="MyGlobalXMLDialogTemplateWithTitleAndCustomControls" inherits="ZO_CustomDialogBase" mouseEnabled="true" virtual="true">
                 <OnInitialized>
                 </OnInitialized>
@@ -65,7 +67,7 @@
                 </Controls>
             </TopLevelControl>
 
-----Example of addCustomEntryDialog.customAddFunction:
+------addCustomEntryDialog.customAddFunction:
             customAddFunction = function(orderListBox, dialog)
                 --Get the child control "Value" -> the label
                 local value = dialog:GetNamedChild("Value")
@@ -74,6 +76,63 @@
                     return value:GetText(), nil
                 end
             end,
+
+
+----Example2 - ZO_Combobox at dialog
+------addCustomEntryDialog.XMLtemplate:
+            <TopLevelControl name="MyGlobalXMLDialogTemplateWithTitleAndCustomControls" inherits="ZO_CustomDialogBase" mouseEnabled="true" virtual="true">
+                <OnInitialized>
+                </OnInitialized>
+                <Controls>
+                    <Control name="$(parent)Value" inherits="ZO_ComboBox" mouseEnabled="true">
+                        <Dimensions x="400" y="20" />
+                        <Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="30" offsetY="30" />
+                    </Control>
+                    <Control name="$(parent)Cancel" inherits="ZO_CustomDialogButton"/>
+                    <Control name="$(parent)Accept" inherits="ZO_CustomDialogButton"/>
+                </Controls>
+            </TopLevelControl>
+
+------addCustomEntryDialog.customAddFunction:
+            customAddFunction = function(orderListBox, dialog)
+                local comboBox = dialog:GetNamedChild("Value")
+                if comboBox then
+                    d(">found combobox")
+                    local selectedItem = comboBox:GetSelectedItemData()
+                    if selectedItem ~= nil then
+                        d(">found combobox selectedItemData")
+                        local data = selectedItem.data or selectedItem
+                        return data.label or data.name or data.guildName, data.value or data.guildId
+                    end
+                end
+            end,
+
+------addCustomEntryDialog.customSetupFunction:
+            customSetupFunction = function(orderListBox, dialog)
+                local data = dialog.data
+                local comboBoxControl = dialog:GetNamedChild("Value")
+                if comboBoxControl then
+                    d(">found combobox")
+                    local dropdown = ZO_ComboBox_ObjectFromContainer(comboBoxControl)
+                    dropdown:SetSortsItems(false)
+                    dropdown:SetDropdownFont("ZoFontHeader")
+                    dropdown:SetSpacing(8)
+                    --Add current guilds to the dropdown
+                    local function OnCategorySelectionChanged(control, name, entry, selectionChanged)
+                        d("Selected guild: " .. tostring(entry.name))
+                    end
+                    for guildIndex=1, GetNumGuilds(), 1 do
+                        local guildId = GetGuildId(guildIndex)
+                        local guildName = GetGuildName(guildId)
+                        local entry = dropdown:CreateItemEntry(guildName, OnCategorySelectionChanged)
+                        entry.guildId = guildId
+                        entry.guildIndex = guildIndex
+                        entry.name = guildName
+                        dropdown:AddItem(entry, ZO_COMBOBOX_SUPPRESS_UPDATE)
+                    end
+                end
+            end,
+
 ]]
 
 local widgetVersion = 14
@@ -1329,7 +1388,16 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
             local customAddFunction =   addCustomEntryDialogData.customAddFunction or nil
             if type(customAddFunction) == "function" then
                 local validateFunction =    addCustomEntryDialogData.validator or nil
---d(">>customAddFunction was provided")
+                if type(validateFunction) ~= "function" then
+                    validateFunction = nil
+                end
+                local customSetupFunction =   addCustomEntryDialogData.customSetupFunction or nil
+                if type(customSetupFunction) ~= "function" then
+                    customSetupFunction = nil
+                end
+
+
+                --d(">>customAddFunction was provided")
                 addNewEntryDialogName   = controlName .. orderListBoxAddNewEntryDialogSuffix
 --d(">>addNewEntryDialogName: " ..tostring(addNewEntryDialogName))
                 control.addNewEntryDialogName = addNewEntryDialogName
@@ -1338,37 +1406,42 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
                 if not ZO_Dialogs_IsDialogRegistered(addNewEntryDialogName) then
                     useCustomAddEntryDialog = true
 
-                    ZO_Dialogs_RegisterCustomDialog(addNewEntryDialogName,
-                            {
-                                gamepadInfo =
-                                {
-                                    dialogType = GAMEPAD_DIALOGS.CUSTOM,
-                                },
-                                customControl = XMLcustomControl,
-                                title =
-                                {
-                                    text = dialogTitle,
-                                },
-                                mainText =
-                                {
-                                    text = dialogTitle,
-                                },
-                                buttons =
-                                {
-                                    [1] = {
-                                        text = SI_DIALOG_ACCEPT,
-                                        callback = function(dialog)
-                                            orderListBox:AddNewEntryFromCustomDialog(dialog, customAddFunction, validateFunction)
-                                        end,
-                                        control = XMLcustomControl:GetNamedChild("Accept"),
-                                    },
-                                    [2] = {
-                                        text = SI_DIALOG_EXIT,
-                                        control = XMLcustomControl:GetNamedChild("Cancel"),
-                                    },
-                                },
-                                --noChoiceCallback =
-                            })
+                    local customDialogInfo = {
+                        gamepadInfo =
+                        {
+                            dialogType = GAMEPAD_DIALOGS.CUSTOM,
+                        },
+                        customControl = XMLcustomControl,
+                        title =
+                        {
+                            text = dialogTitle,
+                        },
+                        mainText =
+                        {
+                            text = dialogTitle,
+                        },
+                        buttons =
+                        {
+                            [1] = {
+                                text = SI_DIALOG_ACCEPT,
+                                callback = function(dialog)
+                                    orderListBox:AddNewEntryFromCustomDialog(dialog, customAddFunction, validateFunction)
+                                end,
+                                control = XMLcustomControl:GetNamedChild("Accept"),
+                            },
+                            [2] = {
+                                text = SI_DIALOG_EXIT,
+                                control = XMLcustomControl:GetNamedChild("Cancel"),
+                            },
+                        },
+                        --noChoiceCallback =
+                    }
+
+                    if customSetupFunction ~= nil then
+                        customDialogInfo.setup = function(dialog) customSetupFunction(orderListBox, dialog) end
+                    end
+
+                    ZO_Dialogs_RegisterCustomDialog(addNewEntryDialogName, customDialogInfo)
                 end
             end
         end
@@ -1382,6 +1455,9 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         local specialCharacters =   LAMgetDefaultValue(addEntryDialogData.specialCharacters) or nil
         local maxInputCharacters =  LAMgetDefaultValue(addEntryDialogData.maxInputCharacters) or nil
         local validateFunction =    addEntryDialogData.validator or nil
+        if type(validateFunction) ~= "function" then
+            validateFunction = nil
+        end
         local validatesText =       type(validateFunction) == "function" or false
         local defaultText =         LAMgetDefaultValue(addEntryDialogData.defaultText) or nil
         local instructions =        LAMgetDefaultValue(addEntryDialogData.instructions) or nil
