@@ -136,7 +136,7 @@
 
 ]]
 
-local widgetVersion = 14
+local widgetVersion = 15
 local LAM = LibAddonMenu2
 local util = LAM.util
 local em = EVENT_MANAGER
@@ -300,6 +300,7 @@ local function getCursorTLC()
     cursorTLCLabel = GetControl(cursorTLC, "Label")
     cursorTLC:ClearAnchors()
     cursorTLC:SetDimensions(0, 0)
+    cursorTLC:SetResizeToFitDescendents(true)
 end
 
 --Functions of the listBox data table
@@ -1062,6 +1063,8 @@ function OrderListBox:OnGlobalMouseUpDuringDrag(eventId, mouseButton, ctrl, alt,
     end
 end
 
+local maxCursorTextWidth    = 600
+local maxCursorTextHeight   = 100
 function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
     if cursorTLC == nil then getCursorTLC() end
     if not cursorTLC then return end
@@ -1069,26 +1072,39 @@ function OrderListBox:UpdateCursorTLC(isHidden, draggedControl)
     cursorTLC:SetResizeToFitDescendents(true)
     if not isHidden then
         cursorTLC.orderListBox = self
-        cursorTLC:SetAnchor(LEFT, GuiMouse, RIGHT, 5, 0)
+        cursorTLC:SetAnchor(LEFT, GuiMouse, RIGHT, 8, 0)
+        cursorTLCLabel:SetDimensionConstraints(0, 0, maxCursorTextWidth, maxCursorTextHeight)
+        cursorTLCLabel:SetResizeToFitConstrains(ANCHOR_CONSTRAINS_XY)
         cursorTLCLabel:SetText(self.draggingText)
-        local textWidth = (cursorTLCLabel:GetTextWidth()) + 2
-        cursorTLCLabel:SetWidth(textWidth)
-        cursorTLCLabel:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
-        cursorTLC:SetWidth(textWidth)
-        cursorTLC:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
-        local width, height = cursorTLCLabel:GetDimensions()
-        if width > 600 then width = 600 end
-        if height > 100 then height = 100 end
---d(">GuiMouse:isHidden: " ..tostring(GuiMouse:IsHidden()) .. ", cursorTLC.width: " ..tostring(cursorTLC:GetWidth()) ..", cursorTLC.height: " ..tostring(cursorTLC:GetHeight()) .. ", text: " ..tostring(self.draggingText))
-        cursorTLC:SetDimensionConstraints(width, height, 600, 100)
+        zo_callLater(function()
+            local textWidth = (cursorTLCLabel:GetTextWidth()) + 2
+            textWidth = zo_clamp(textWidth, 0, maxCursorTextWidth)
+            --Fallback if textWidth was not determined properly: Sometimes the textlabel only showed the first character
+            if textWidth == 0 and self.draggingText ~= "" then
+                textWidth = maxCursorTextWidth
+            end
+            cursorTLCLabel:SetWidth(textWidth)
+            cursorTLCLabel:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
+            --should autoamtically be resized by the label (resizeToFitDescendents = true)
+            --cursorTLC:SetWidth(textWidth)
+            --cursorTLC:SetHeight(self.rowHeight or SORT_LIST_ROW_DEFAULT_HEIGHT)
+            --For debugging
+            --[[
+            local width, height = cursorTLCLabel:GetDimensions()
+            width = zo_clamp(width, 0, maxCursorTextWidth)
+            height = zo_clamp(height, 0, maxCursorTextHeight)
+            ]]
+            --d(">GuiMouse:isHidden: " ..tostring(GuiMouse:IsHidden()) .. ", cursorTLC.width: " ..tostring(cursorTLC:GetWidth()) ..", cursorTLC.height: " ..tostring(cursorTLC:GetHeight()) .. ", text: " ..tostring(self.draggingText))
+        end, 0) --next framecheck so label text was updated and text size returns properly!
         cursorTLC:SetDrawTier(DT_HIGH)
         cursorTLC:SetDrawLayer(DL_OVERLAY)
         cursorTLC:SetDrawLevel(5)
         cursorTLC:SetAlpha(0.7)
     else
         cursorTLC.orderListBox = nil
-        cursorTLC:SetDimensions(0, 0)
+        cursorTLCLabel:SetDimensions(0, 0)
         cursorTLCLabel:SetText("")
+        cursorTLC:SetDimensions(0, 0)
         cursorTLC:SetDrawTier(DT_LOW)
         cursorTLC:SetDrawLayer(DL_BACKGROUND)
         cursorTLC:SetDrawLevel(0)
@@ -1511,6 +1527,7 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         end
     end
 
+    local showRemoveButton = LAMgetDefaultValue(orderListBoxData.showRemoveEntryButton)
     --Add the "Add new value" button -> A small + icon next to the LAM listbox control
     if useCustomAddEntryDialog or useAddEntryDialog then
         local addNewEntryButton = wm:CreateControl(controlName .. orderListBoxAddNewEntryButtonSuffix, control, CT_BUTTON)
@@ -1529,10 +1546,19 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         end
         addNewEntryButton:SetMouseEnabled(true)
         addNewEntryButton:SetHidden(false)
-        if control.isHalfWidth then
-            addNewEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, -24, 0)
+        local offsetXAddNewButon = showRemoveButton and -24 or 0
+        if isExtraWide then
+            if control.isHalfWidth then
+                addNewEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, offsetXAddNewButon, 0)
+            else
+                addNewEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, offsetXAddNewButon, 0)
+            end
         else
-            addNewEntryButton:SetAnchor(TOP, control, TOP, 0, 0)
+            if control.isHalfWidth then
+                addNewEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, offsetXAddNewButon, 0)
+            else
+                addNewEntryButton:SetAnchor(TOP, control, TOP, offsetXAddNewButon, 0)
+            end
         end
         addNewEntryButton:SetClickSound("Click")
         addNewEntryButton.data = { tooltipText = dialogTitle }
@@ -1545,7 +1571,6 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
     end
 
     local askBeforeRemoveEntryDialogName = controlName .. orderListBoxAskBeforeRemoveEntryDialogSuffix
-    local showRemoveButton = LAMgetDefaultValue(orderListBoxData.showRemoveEntryButton)
     if showRemoveButton == true then
         local removeEntryStr = LAMgetStringFromValue(translation.REMOVE_ENTRY)
         local removeEntryDescStr = LAMgetStringFromValue(translation.REMOVE_ENTRY_DESC)
@@ -1595,17 +1620,35 @@ function LAMCreateControl.orderlistbox(parent, orderListBoxData, controlName)
         removeEntryButton:SetDisabledTexture("/esoui/art/buttons/minus_disabled.dds")
         removeEntryButton:SetMouseEnabled(false)
         removeEntryButton:SetHidden(false)
-        if control.isHalfWidth then
-            if control.AddNewEntryButton ~= nil then
-                removeEntryButton:SetAnchor(LEFT, control.AddNewEntryButton, RIGHT, 0, 0)
+
+        local addNewButtonCreated = control.AddNewEntryButton ~= nil
+        if isExtraWide then
+            if control.isHalfWidth then
+                if addNewButtonCreated then
+                    removeEntryButton:SetAnchor(LEFT, control.AddNewEntryButton, RIGHT, 1, 0)
+                else
+                    removeEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, 0, 0)
+                end
             else
-                removeEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, -24, 0)
+                if addNewButtonCreated then
+                    removeEntryButton:SetAnchor(LEFT, control.AddNewEntryButton, RIGHT, 1, 0)
+                else
+                    removeEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, 0, 0)
+                end
             end
         else
-            if control.AddNewEntryButton ~= nil then
-                removeEntryButton:SetAnchor(LEFT, control.AddNewEntryButton, RIGHT, 0, 0)
+            if control.isHalfWidth then
+                if addNewButtonCreated then
+                    removeEntryButton:SetAnchor(LEFT, control.AddNewEntryButton, RIGHT, 1, 0)
+                else
+                    removeEntryButton:SetAnchor(TOPRIGHT, control, TOPRIGHT, 0, 0)
+                end
             else
-                removeEntryButton:SetAnchor(TOP, control, TOP, 0, 0)
+                if addNewButtonCreated then
+                    removeEntryButton:SetAnchor(LEFT, control.AddNewEntryButton, RIGHT, 1, 0)
+                else
+                    removeEntryButton:SetAnchor(TOP, control, TOP, 0, 0)
+                end
             end
         end
         removeEntryButton:SetClickSound("Click")

@@ -1,7 +1,7 @@
 ## APIVersion: 101050 101051
 ## Title: LibAddonMenu-2.0 - OrderListBox widget
-## Version: 14
-## AddOnVersion: 014
+## Version: 15
+## AddOnVersion: 015
 ## IsLibrary: true
 ## DependsOn: LibAddonMenu-2.0>=43
 ## Author: Baertram
